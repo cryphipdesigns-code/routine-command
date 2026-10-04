@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.DS_Store
+*.local
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+public/config.json
+playwright-report/
+test-results/
+supabase/.temp/
+tracker-*.png
+habit-modal-*.png
+review-*.png

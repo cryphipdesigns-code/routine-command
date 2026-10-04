@@ -1,0 +1,25 @@
+project_id = "routine_command"
+
+[auth]
+site_url = "https://cryphipdesigns-code.github.io/routine-command/"
+additional_redirect_urls = ["http://127.0.0.1:4175", "http://localhost:4175", "https://cryphipdesigns-code.github.io/routine-command/"]
+
+[auth.email]
+enable_confirmations = true
+max_frequency = "1m0s"
+otp_length = 8
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[db.pooler]
+default_pool_size = 15
+max_client_conn = 200
+
+[storage.analytics]
+enabled = true
+max_namespaces = 10
+
+[storage.image_transformation]
+enabled = true
