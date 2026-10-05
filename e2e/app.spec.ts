@@ -109,6 +109,28 @@ test("captures optional exercise details and preserves them after reload", async
   await expect(restoredExercise.locator('input[data-exercise-detail="timeOfDay"]')).toHaveValue("07:30");
 });
 
+test("keeps the exercise time control inside its mobile column", async ({ page }, testInfo) => {
+  test.skip(!testInfo.project.name.startsWith("mobile"), "Mobile layout check");
+  await page.goto("/");
+  const exercise = page.locator(".habit-check", { hasText: "Exercise" });
+  await exercise.getByText("Workout details").click();
+  const bounds = await exercise.locator('input[data-exercise-detail="timeOfDay"]').evaluate((input) => {
+    const inputBox = input.getBoundingClientRect();
+    const fieldBox = input.closest("label")!.getBoundingClientRect();
+    const cardBox = input.closest("article")!.getBoundingClientRect();
+    return {
+      inputLeft: inputBox.left,
+      inputRight: inputBox.right,
+      fieldLeft: fieldBox.left,
+      fieldRight: fieldBox.right,
+      cardRight: cardBox.right,
+    };
+  });
+  expect(bounds.inputLeft).toBeGreaterThanOrEqual(bounds.fieldLeft);
+  expect(bounds.inputRight).toBeLessThanOrEqual(bounds.fieldRight + 1);
+  expect(bounds.inputRight).toBeLessThan(bounds.cardRight);
+});
+
 test("keeps a long authentication session in first-party cookies", async ({ page }) => {
   await page.goto("/");
   const result = await page.evaluate(async () => {
