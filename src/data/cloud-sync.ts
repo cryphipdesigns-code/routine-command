@@ -1,6 +1,7 @@
 import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
 import type { TrackerStore } from "../state/store";
 import type { AppState } from "../types";
+import { CookieAuthStorage } from "./cookie-auth-storage";
 
 export type SyncPhase =
   | "unconfigured"
@@ -41,7 +42,12 @@ export class CloudSyncController {
     this.client =
       supabaseUrl && supabasePublishableKey
         ? createClient(supabaseUrl, supabasePublishableKey, {
-            auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+            auth: {
+              persistSession: true,
+              autoRefreshToken: true,
+              detectSessionInUrl: true,
+              storage: new CookieAuthStorage(),
+            },
           })
         : null;
     this.state = this.client

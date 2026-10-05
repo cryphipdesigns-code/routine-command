@@ -82,3 +82,19 @@ test("keeps mobile navigation fixed and avoids horizontal overflow", async ({ pa
   }));
   expect(dimensions.width).toBeLessThanOrEqual(dimensions.viewport);
 });
+
+test("keeps a long authentication session in first-party cookies", async ({ page }) => {
+  await page.goto("/");
+  const result = await page.evaluate(async () => {
+    const { CookieAuthStorage } = await import("/src/data/cookie-auth-storage.ts");
+    const storage = new CookieAuthStorage();
+    const session = `session-${"x".repeat(7000)}-%-complete`;
+    storage.setItem("routine-command-auth-test", session);
+    const restored = storage.getItem("routine-command-auth-test");
+    const localCopy = localStorage.getItem("routine-command-auth-test");
+    storage.removeItem("routine-command-auth-test");
+    return { matches: restored === session, localCopy };
+  });
+
+  expect(result).toEqual({ matches: true, localCopy: null });
+});

@@ -76,4 +76,6 @@ Routine Command remains local-first: records are stored immediately in the
 browser's existing IndexedDB database named `tracker-local`, so prior Daymark data
 is retained. When a user signs in with a secure email link, the current local
 state is adopted by Supabase and kept in sync across devices. Row Level Security
-limits each cloud record to its authenticated owner.
+limits each cloud record to its authenticated owner. Authentication sessions use
+first-party cookies so supported iPhones retain sign-in when the app is added to
+the Home Screen.
