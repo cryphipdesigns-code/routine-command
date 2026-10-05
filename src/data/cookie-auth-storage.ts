@@ -1,9 +1,11 @@
+import { appDirectoryPath } from "./app-location";
+
 const CHUNK_SIZE = 2800;
 const COOKIE_LIFETIME_SECONDS = 60 * 60 * 24 * 365;
 const COUNT_SUFFIX = "__routine_chunks";
 
 export class CookieAuthStorage {
-  private readonly path = import.meta.env.BASE_URL || "/";
+  private readonly path = appDirectoryPath(window.location.href);
 
   getItem(key: string): string | null {
     const count = Number(this.readCookie(`${key}${COUNT_SUFFIX}`));

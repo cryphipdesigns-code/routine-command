@@ -1,4 +1,4 @@
-const CACHE_NAME = "routine-command-shell-v1";
+const CACHE_NAME = "routine-command-shell-v2";
 const scopePath = new URL(self.registration.scope).pathname;
 const APP_SHELL = [scopePath, `${scopePath}manifest.webmanifest`, `${scopePath}icon.svg`];
 
@@ -24,15 +24,13 @@ self.addEventListener("fetch", (event) => {
 
   if (request.mode === "navigate") {
     event.respondWith(
-      caches.match(scopePath).then(
-        (cached) =>
-          cached ??
-          fetch(request).then((response) => {
+      fetch(request)
+        .then((response) => {
             const copy = response.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(scopePath, copy));
             return response;
-          }),
-      ),
+        })
+        .catch(() => caches.match(scopePath)),
     );
     return;
   }

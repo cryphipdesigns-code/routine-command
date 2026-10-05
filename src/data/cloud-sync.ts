@@ -2,6 +2,7 @@ import { createClient, type Session, type SupabaseClient } from "@supabase/supab
 import type { TrackerStore } from "../state/store";
 import type { AppState } from "../types";
 import { CookieAuthStorage } from "./cookie-auth-storage";
+import { appDirectoryUrl } from "./app-location";
 
 export type SyncPhase =
   | "unconfigured"
@@ -121,7 +122,7 @@ export class CloudSyncController {
       email: normalizedEmail,
       message: "Sending a secure sign-in link…",
     });
-    const redirectTo = new URL(import.meta.env.BASE_URL, window.location.origin).href;
+    const redirectTo = appDirectoryUrl(window.location.href);
     const { error } = await this.client.auth.signInWithOtp({
       email: normalizedEmail,
       options: { emailRedirectTo: redirectTo },
