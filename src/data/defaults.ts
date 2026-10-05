@@ -82,19 +82,6 @@ const habits: Habit[] = [
     createdAt,
     archivedAt: null,
   },
-  {
-    id: "habit-calories",
-    name: "Calories",
-    inputType: "number",
-    unit: "kcal",
-    icon: "flame",
-    color: "#db5c5c",
-    optional: false,
-    direction: "build",
-    sortOrder: 6,
-    createdAt,
-    archivedAt: null,
-  },
 ];
 
 const rule = (
@@ -121,7 +108,7 @@ const rule = (
 export function defaultState(): AppState {
   const today = todayKey();
   return {
-    schemaVersion: 5,
+    schemaVersion: 6,
     activeView: "today",
     selectedDate: today,
     reviewAnchor: today,
@@ -134,7 +121,6 @@ export function defaultState(): AppState {
       rule("rule-cold", "habit-cold", [0, 1, 2, 3, 4, 5, 6], "checked", null, null),
       rule("rule-sunlight", "habit-sunlight", [0, 1, 2, 3, 4, 5, 6], "checked", null, null),
       rule("rule-exercise", "habit-exercise", [1, 2, 3, 4, 5], "checked", null, null),
-      rule("rule-calories", "habit-calories", [0, 1, 2, 3, 4, 5, 6], "lte", null, 2200),
     ],
     logs: [],
     exceptions: [],
@@ -146,6 +132,11 @@ export function defaultState(): AppState {
       appBadgeEnabled: false,
       personalReward: "",
       rewardTarget: 0.8,
+      signalTargets: {
+        caloriesMax: 2200,
+        wakeTimeLatest: null,
+        bedTimeLatest: null,
+      },
     },
   };
 }

@@ -87,9 +87,6 @@ test("celebrates when every required objective is secured", async ({ page }) => 
     await openButtons.first().evaluate((button: HTMLButtonElement) => button.click());
     openButtons = page.locator('.habit-check .completion-button[aria-pressed="false"]');
   }
-  const calories = page.locator('[data-numeric-log="habit-calories"]');
-  await calories.fill("2000");
-  await calories.dispatchEvent("change");
   await expect(page.locator(".celebration")).toContainText(/Day secured|Perfect alignment/);
   const total = ((await page.locator(".progress-ring span").textContent()) ?? "").replace("of ", "");
   await expect(page.locator(".progress-ring strong")).toHaveText(total);
@@ -173,7 +170,7 @@ test("offers a manual refresh inside the installed app", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
 });
 
-test("keeps 15 min Read as yes/no and retains sleep times", async ({ page }) => {
+test("keeps 15 min Read as yes/no and retains daily signals", async ({ page }) => {
   await page.goto("/");
   await page.locator('[data-view="habits"]:visible').first().click();
   const readCard = page.locator(".habit-manager-card", { hasText: "15 min Read" }).first();
@@ -183,13 +180,46 @@ test("keeps 15 min Read as yes/no and retains sleep times", async ({ page }) => 
   await page.locator('[data-view="today"]:visible').first().click();
   await expect(page.getByRole("button", { name: "Complete 15 min Read", exact: true })).toBeVisible();
 
-  await page.getByLabel("Wake up time").fill("06:30");
-  await page.getByLabel("Wake up time").dispatchEvent("change");
+  await page.getByLabel("Wake time").fill("06:30");
+  await page.getByLabel("Wake time").dispatchEvent("change");
   await page.getByLabel("Bedtime").fill("22:45");
   await page.getByLabel("Bedtime").dispatchEvent("change");
+  await page.getByLabel("Calories consumed").fill("2050");
+  await page.getByLabel("Calories consumed").dispatchEvent("change");
   await page.reload();
-  await expect(page.getByLabel("Wake up time")).toHaveValue("06:30");
+  await expect(page.getByLabel("Wake time")).toHaveValue("06:30");
   await expect(page.getByLabel("Bedtime")).toHaveValue("22:45");
+  await expect(page.getByLabel("Calories consumed")).toHaveValue("2050");
+  await expect(page.locator('[data-habit-card-id="habit-calories"]')).toHaveCount(0);
+});
+
+test("applies optional signal targets without changing habit progress", async ({ page }) => {
+  await page.goto("/");
+  const requiredBefore = await page.locator(".progress-ring span").textContent();
+  await page.locator('[data-view="settings"]:visible').first().click();
+  await page.getByLabel("Calories at or below").fill("2100");
+  await page.getByLabel("Calories at or below").dispatchEvent("change");
+  await page.getByLabel("Wake by").fill("06:30");
+  await page.getByLabel("Wake by").dispatchEvent("change");
+  await page.getByLabel("Bed by").fill("22:30");
+  await page.getByLabel("Bed by").dispatchEvent("change");
+
+  await page.locator('[data-view="today"]:visible').first().click();
+  await page.getByLabel("Wake time").fill("06:15");
+  await page.getByLabel("Wake time").dispatchEvent("change");
+  await page.getByLabel("Bedtime").fill("23:15");
+  await page.getByLabel("Bedtime").dispatchEvent("change");
+  await page.getByLabel("Calories consumed").fill("2000");
+  await page.getByLabel("Calories consumed").dispatchEvent("change");
+
+  await expect(page.locator(".signal-entry-card", { hasText: "Wake time" })).toContainText("In range");
+  await expect(page.locator(".signal-entry-card", { hasText: "Bedtime" })).toContainText("Outside target");
+  await expect(page.locator(".signal-entry-card", { hasText: "Calories" })).toContainText("In range");
+  await expect(page.locator(".progress-ring span")).toHaveText(requiredBefore ?? "");
+
+  await page.locator('[data-view="review"]:visible').first().click();
+  await expect(page.getByRole("heading", { name: "Weekly signal averages" })).toBeVisible();
+  await expect(page.locator(".signal-summary-card")).toContainText("1 day recorded");
 });
 
 test("marks a habit optional without adding it to required progress", async ({ page }) => {

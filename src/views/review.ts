@@ -14,6 +14,7 @@ import {
 } from "../domain/dates";
 import { escapeHtml, formatPercent, formatValue, icon } from "../ui";
 import { activeHabits, emptyState, pageIntro } from "./shared";
+import { renderSignalSummary } from "./signal-summary";
 
 export function renderReview(state: AppState): string {
   const habits = activeHabits(state);
@@ -68,6 +69,8 @@ export function renderReview(state: AppState): string {
             : renderMonth(state, habits, start, end)
           : emptyState("No habits yet", "Create a habit to begin building a review history.")
       }
+
+      ${renderSignalSummary(state, start, end, isWeek ? "Weekly signal averages" : "Monthly signal averages")}
     </div>
   `;
 }

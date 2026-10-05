@@ -24,6 +24,16 @@ export function renderSettings(state: AppState, sync: CloudSyncSnapshot): string
           <div class="setting-row"><div><strong>Local timezone</strong><span>Daily boundaries follow this device</span></div><span class="setting-value">${escapeHtml(state.settings.timezone)}</span></div>
         </div>
 
+        <div class="section-block settings-card signal-target-settings">
+          <div class="section-heading"><div><p class="eyebrow">Daily signals</p><h2>Optional targets</h2></div><span class="status-pill automatic">Not scored</span></div>
+          <p class="settings-note">Targets add context to trends. Missing or outside-range data never lowers habit adherence.</p>
+          <div class="signal-target-grid">
+            <label class="field"><span>Calories at or below</span><input type="number" inputmode="numeric" min="0" step="1" data-signal-target="caloriesMax" value="${state.settings.signalTargets.caloriesMax ?? ""}" placeholder="No target" /></label>
+            <label class="field"><span>Wake by</span><input type="time" data-signal-target="wakeTimeLatest" value="${escapeHtml(state.settings.signalTargets.wakeTimeLatest ?? "")}" /></label>
+            <label class="field"><span>Bed by</span><input type="time" data-signal-target="bedTimeLatest" value="${escapeHtml(state.settings.signalTargets.bedTimeLatest ?? "")}" /></label>
+          </div>
+        </div>
+
         <div class="section-block settings-card motivation-settings">
           <div class="section-heading"><div><p class="eyebrow">Motivation</p><h2>Reward vault</h2></div><span class="status-pill automatic">Rolling 7 days</span></div>
           <label class="field"><span>Personal reward</span><input type="text" data-setting="personalReward" value="${escapeHtml(state.settings.personalReward)}" maxlength="80" placeholder="e.g. Guilt-free movie night" /></label>

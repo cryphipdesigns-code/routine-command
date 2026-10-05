@@ -68,8 +68,15 @@ export interface DailyCheckin {
   energy: number | null;
   wakeTime: string | null;
   bedTime: string | null;
+  calories: number | null;
   note: string;
   updatedAt: string;
+}
+
+export interface SignalTargets {
+  caloriesMax: number | null;
+  wakeTimeLatest: string | null;
+  bedTimeLatest: string | null;
 }
 
 export interface UserSettings {
@@ -79,10 +86,11 @@ export interface UserSettings {
   appBadgeEnabled: boolean;
   personalReward: string;
   rewardTarget: number;
+  signalTargets: SignalTargets;
 }
 
 export interface AppState {
-  schemaVersion: 5;
+  schemaVersion: 6;
   activeView: ViewId;
   selectedDate: string;
   reviewAnchor: string;

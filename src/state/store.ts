@@ -139,6 +139,7 @@ export class TrackerStore {
       energy: existing?.energy ?? null,
       wakeTime: existing?.wakeTime ?? null,
       bedTime: existing?.bedTime ?? null,
+      calories: existing?.calories ?? null,
       note: existing?.note ?? "",
       updatedAt: new Date().toISOString(),
       [metric]: existing?.[metric] === value ? null : value,
@@ -156,6 +157,7 @@ export class TrackerStore {
       energy: existing?.energy ?? null,
       wakeTime: existing?.wakeTime ?? null,
       bedTime: existing?.bedTime ?? null,
+      calories: existing?.calories ?? null,
       note,
       updatedAt: new Date().toISOString(),
     };
@@ -172,9 +174,27 @@ export class TrackerStore {
       energy: existing?.energy ?? null,
       wakeTime: existing?.wakeTime ?? null,
       bedTime: existing?.bedTime ?? null,
+      calories: existing?.calories ?? null,
       note: existing?.note ?? "",
       updatedAt: new Date().toISOString(),
       [field]: value,
+    };
+    this.replaceCheckin(checkin);
+  }
+
+  setCheckinCalories(localDate: string, value: number | null): void {
+    const existing = this.state.checkins.find((checkin) => checkin.localDate === localDate);
+    const checkin: DailyCheckin = {
+      id: existing?.id ?? crypto.randomUUID(),
+      localDate,
+      mood: existing?.mood ?? null,
+      productivity: existing?.productivity ?? null,
+      energy: existing?.energy ?? null,
+      wakeTime: existing?.wakeTime ?? null,
+      bedTime: existing?.bedTime ?? null,
+      calories: value !== null && Number.isFinite(value) && value >= 0 ? value : null,
+      note: existing?.note ?? "",
+      updatedAt: new Date().toISOString(),
     };
     this.replaceCheckin(checkin);
   }
@@ -458,6 +478,17 @@ function normalizeState(state: AppState): AppState {
           : null,
       }))
     : [];
+  let checkins: DailyCheckin[] = Array.isArray(state.checkins)
+    ? state.checkins.map((checkin) => ({
+        ...checkin,
+        wakeTime: checkin.wakeTime ?? null,
+        bedTime: checkin.bedTime ?? null,
+        calories:
+          typeof checkin.calories === "number" && Number.isFinite(checkin.calories)
+            ? checkin.calories
+            : null,
+      }))
+    : [];
 
   if (savedVersion < 3) {
     const migrated = migrateStarterHabitsV3(habits, rules, logs, base);
@@ -466,10 +497,22 @@ function normalizeState(state: AppState): AppState {
     logs = migrated.logs;
   }
 
+  let migratedCaloriesTarget: number | null = null;
+  if (savedVersion < 6) {
+    const migrated = migrateCaloriesSignalV6(habits, rules, logs, checkins);
+    habits = migrated.habits;
+    rules = migrated.rules;
+    logs = migrated.logs;
+    checkins = migrated.checkins;
+    migratedCaloriesTarget = migrated.caloriesTarget;
+  }
+
+  const rawSignalTargets = state.settings?.signalTargets;
+
   return {
     ...base,
     ...state,
-    schemaVersion: 5,
+    schemaVersion: 6,
     activeView: activeViews.includes(state.activeView) ? state.activeView : "today",
     selectedDate: state.selectedDate || todayKey(),
     reviewAnchor: state.reviewAnchor || todayKey(),
@@ -477,13 +520,7 @@ function normalizeState(state: AppState): AppState {
     rules,
     logs,
     exceptions: Array.isArray(state.exceptions) ? state.exceptions : [],
-    checkins: Array.isArray(state.checkins)
-      ? state.checkins.map((checkin) => ({
-          ...checkin,
-          wakeTime: checkin.wakeTime ?? null,
-          bedTime: checkin.bedTime ?? null,
-        }))
-      : [],
+    checkins,
     settings: {
       weekStartsOn: state.settings?.weekStartsOn === 0 ? 0 : 1,
       timezone: state.settings?.timezone || base.settings.timezone,
@@ -499,8 +536,89 @@ function normalizeState(state: AppState): AppState {
         state.settings.rewardTarget <= 1
           ? state.settings.rewardTarget
           : 0.8,
+      signalTargets: {
+        caloriesMax: nullableNonnegativeNumber(
+          rawSignalTargets?.caloriesMax,
+          migratedCaloriesTarget ?? base.settings.signalTargets.caloriesMax,
+        ),
+        wakeTimeLatest: nullableTime(
+          rawSignalTargets?.wakeTimeLatest,
+          base.settings.signalTargets.wakeTimeLatest,
+        ),
+        bedTimeLatest: nullableTime(
+          rawSignalTargets?.bedTimeLatest,
+          base.settings.signalTargets.bedTimeLatest,
+        ),
+      },
     },
   };
+}
+
+function migrateCaloriesSignalV6(
+  habits: Habit[],
+  rules: HabitRule[],
+  logs: HabitLog[],
+  checkins: DailyCheckin[],
+): {
+  habits: Habit[];
+  rules: HabitRule[];
+  logs: HabitLog[];
+  checkins: DailyCheckin[];
+  caloriesTarget: number | null;
+} {
+  const habitId = "habit-calories";
+  const calorieRules = rules
+    .filter((rule) => rule.habitId === habitId)
+    .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom));
+  const latestRule = calorieRules[0];
+  const caloriesTarget =
+    latestRule?.comparator === "lte" || latestRule?.comparator === "between"
+      ? latestRule.targetMax
+      : latestRule?.targetMin ?? null;
+  const nextCheckins = checkins.map((checkin) => ({ ...checkin }));
+
+  logs
+    .filter((log) => log.habitId === habitId && log.numericValue !== null)
+    .forEach((log) => {
+      const index = nextCheckins.findIndex((checkin) => checkin.localDate === log.localDate);
+      if (index >= 0) {
+        const existing = nextCheckins[index]!;
+        if (existing.calories === null) {
+          nextCheckins[index] = { ...existing, calories: log.numericValue };
+        }
+        return;
+      }
+      nextCheckins.push({
+        id: crypto.randomUUID(),
+        localDate: log.localDate,
+        mood: null,
+        productivity: null,
+        energy: null,
+        wakeTime: null,
+        bedTime: null,
+        calories: log.numericValue,
+        note: log.note || "",
+        updatedAt: log.updatedAt,
+      });
+    });
+
+  return {
+    habits: habits.filter((habit) => habit.id !== habitId),
+    rules: rules.filter((rule) => rule.habitId !== habitId),
+    logs: logs.filter((log) => log.habitId !== habitId),
+    checkins: nextCheckins,
+    caloriesTarget,
+  };
+}
+
+function nullableNonnegativeNumber(value: unknown, fallback: number | null): number | null {
+  if (value === null) return null;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : fallback;
+}
+
+function nullableTime(value: unknown, fallback: string | null): string | null {
+  if (value === null) return null;
+  return typeof value === "string" && /^\d{2}:\d{2}$/.test(value) ? value : fallback;
 }
 
 function normalizeExerciseDetails(details?: Partial<ExerciseDetails> | null): ExerciseDetails {

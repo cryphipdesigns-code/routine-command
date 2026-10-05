@@ -411,6 +411,27 @@ export class TrackerApp {
       this.store.setCheckinNote(this.store.snapshot.selectedDate, input.value.trim());
       return;
     }
+    if (input.matches("[data-checkin-calories]")) {
+      this.store.setCheckinCalories(
+        this.store.snapshot.selectedDate,
+        numberOrNull(input.value),
+      );
+      return;
+    }
+    if (input.matches("[data-signal-target]")) {
+      const target = input.getAttribute("data-signal-target");
+      const current = this.store.snapshot.settings.signalTargets;
+      if (target === "caloriesMax") {
+        this.store.updateSettings({
+          signalTargets: { ...current, caloriesMax: numberOrNull(input.value) },
+        });
+      } else if (target === "wakeTimeLatest" || target === "bedTimeLatest") {
+        this.store.updateSettings({
+          signalTargets: { ...current, [target]: input.value || null },
+        });
+      }
+      return;
+    }
     if (input.matches("[data-setting]")) {
       const setting = input.getAttribute("data-setting");
       if (setting === "showEnergy") {
@@ -561,9 +582,9 @@ export class TrackerApp {
         <form id="habitForm">
           <label class="field"><span>Name</span><input name="name" value="${escapeHtml(habit?.name ?? "")}" placeholder="e.g. Read" maxlength="50" autofocus required /></label>
           <fieldset class="form-group"><legend>What kind of goal is it?</legend><div class="choice-cards direction-choices"><label><input type="radio" name="direction" value="build" ${direction === "build" ? "checked" : ""}/><span>${icon("plus", 20)}<strong>Build</strong><small>Do something helpful</small></span></label><label><input type="radio" name="direction" value="avoid" ${direction === "avoid" ? "checked" : ""}/><span>${icon("target", 20)}<strong>Avoid</strong><small>Stay clear of something</small></span></label></div></fieldset>
-          <fieldset class="form-group"><legend>How will you record it?</legend><div class="choice-cards"><label><input type="radio" name="inputType" value="boolean" ${inputType === "boolean" ? "checked" : ""}/><span>${icon("check", 20)}<strong>Yes / no</strong><small>One tap to complete</small></span></label><label><input type="radio" name="inputType" value="number" ${inputType === "number" ? "checked" : ""}/><span><b>#</b><strong>Number</strong><small>Minutes, calories, count</small></span></label></div></fieldset>
+          <fieldset class="form-group"><legend>How will you record it?</legend><div class="choice-cards"><label><input type="radio" name="inputType" value="boolean" ${inputType === "boolean" ? "checked" : ""}/><span>${icon("check", 20)}<strong>Yes / no</strong><small>One tap to complete</small></span></label><label><input type="radio" name="inputType" value="number" ${inputType === "number" ? "checked" : ""}/><span><b>#</b><strong>Number</strong><small>Minutes, pages, count</small></span></label></div></fieldset>
           <div class="numeric-fields" ${inputType === "boolean" ? "hidden" : ""}>
-            <label class="field"><span>Unit</span><input name="unit" value="${escapeHtml(unit)}" placeholder="min, kcal, steps" maxlength="16" /></label>
+            <label class="field"><span>Unit</span><input name="unit" value="${escapeHtml(unit)}" placeholder="min, pages, steps" maxlength="16" /></label>
             <label class="field"><span>Success means</span><select name="comparator"><option value="gte" ${rule?.comparator === "gte" ? "selected" : ""}>At least</option><option value="lte" ${rule?.comparator === "lte" ? "selected" : ""}>At most</option><option value="between" ${rule?.comparator === "between" ? "selected" : ""}>Between</option><option value="exact" ${rule?.comparator === "exact" ? "selected" : ""}>Exactly</option></select></label>
             <div class="target-fields"><label class="field"><span>Minimum / target</span><input type="number" step="any" min="0" name="targetMin" value="${rule?.targetMin ?? ""}" placeholder="15" /></label><label class="field"><span>Maximum</span><input type="number" step="any" min="0" name="targetMax" value="${rule?.targetMax ?? ""}" placeholder="2200" /></label></div>
           </div>

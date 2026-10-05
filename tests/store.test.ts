@@ -77,6 +77,24 @@ describe("habit lifecycle", () => {
     expect(upgradedStore.snapshot.checkins[0]?.note).toBe("Kept");
   });
 
+  it("moves legacy calorie history and its target into unscored daily signals", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 5, 12));
+    const repository = new MemoryRepository();
+    const legacy = defaultStateForLegacyCalories();
+    repository.state = legacy;
+
+    const store = new TrackerStore(repository);
+    await store.initialize();
+
+    expect(store.snapshot.schemaVersion).toBe(6);
+    expect(store.snapshot.habits.some((habit) => habit.id === "habit-calories")).toBe(false);
+    expect(store.snapshot.rules.some((rule) => rule.habitId === "habit-calories")).toBe(false);
+    expect(store.snapshot.logs.some((log) => log.habitId === "habit-calories")).toBe(false);
+    expect(store.snapshot.checkins.find((item) => item.localDate === "2026-10-04")?.calories).toBe(1875);
+    expect(store.snapshot.settings.signalTargets.caloriesMax).toBe(1950);
+  });
+
   it("versions a recording-type change without rewriting earlier rules", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 9, 2, 12));
@@ -200,3 +218,46 @@ describe("habit lifecycle", () => {
     });
   });
 });
+
+function defaultStateForLegacyCalories(): AppState {
+  const state = new TrackerStore(new MemoryRepository()).snapshot;
+  (state as unknown as { schemaVersion: number }).schemaVersion = 5;
+  delete (state.settings as Partial<typeof state.settings>).signalTargets;
+  state.habits.push({
+    id: "habit-calories",
+    name: "Calories",
+    inputType: "number",
+    unit: "kcal",
+    icon: "flame",
+    color: "#db5c5c",
+    optional: false,
+    direction: "build",
+    sortOrder: state.habits.length,
+    createdAt: "2026-10-01T12:00:00.000Z",
+    archivedAt: null,
+  });
+  state.rules.push({
+    id: "rule-calories",
+    habitId: "habit-calories",
+    effectiveFrom: "2026-10-01",
+    effectiveTo: null,
+    inputType: "number",
+    unit: "kcal",
+    direction: "build",
+    weekdays: [0, 1, 2, 3, 4, 5, 6],
+    comparator: "lte",
+    targetMin: null,
+    targetMax: 1950,
+  });
+  state.logs.push({
+    id: "calorie-log",
+    habitId: "habit-calories",
+    localDate: "2026-10-04",
+    booleanValue: null,
+    numericValue: 1875,
+    source: "manual",
+    note: "",
+    updatedAt: "2026-10-04T20:00:00.000Z",
+  });
+  return state;
+}

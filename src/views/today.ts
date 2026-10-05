@@ -2,6 +2,7 @@ import type { AppState, ExerciseDetails, Habit } from "../types";
 import { evaluateHabitDay, ruleForDate, targetLabel } from "../domain/compliance";
 import { formatDayHeading, isFuture, isToday, parseDateKey } from "../domain/dates";
 import { momentumSummary } from "../domain/momentum";
+import { formatSignalTime, isTimeAtOrBefore } from "../domain/signals";
 import { escapeHtml, formatPercent, icon } from "../ui";
 import { activeHabits, emptyState, pageIntro, statusText } from "./shared";
 
@@ -70,7 +71,7 @@ export function renderToday(state: AppState): string {
 
       ${isToday(state.selectedDate) ? renderMomentum(state) : ""}
 
-      ${renderCheckin(state)}
+      ${renderSignals(state)}
 
       ${
         resting.length
@@ -276,30 +277,41 @@ function renderExerciseDetails(
   `;
 }
 
-function renderCheckin(state: AppState): string {
+function renderSignals(state: AppState): string {
   const checkin = state.checkins.find((item) => item.localDate === state.selectedDate);
+  const targets = state.settings.signalTargets;
   return `
-    <section class="section-block daily-checkin">
+    <section class="section-block daily-checkin daily-signals">
       <div class="section-heading">
-        <div><p class="eyebrow">Daily check-in</p><h2>How did the day feel?</h2></div>
-        <span class="section-icon">${icon("heart", 19)}</span>
+        <div><p class="eyebrow">Daily signals</p><h2>Observe the pattern</h2></div>
+        <span class="status-pill automatic">Not scored</span>
       </div>
-      <div class="checkin-grid">
+      <p class="signal-intro">Record what happened when it is useful. Missing data never counts against the day.</p>
+      <div class="signal-entry-grid">
+        ${renderTimeSignal(
+          "wakeTime",
+          "Wake time",
+          "Today",
+          "sun",
+          checkin?.wakeTime ?? null,
+          targets.wakeTimeLatest,
+          false,
+        )}
+        ${renderTimeSignal(
+          "bedTime",
+          "Bedtime",
+          "Last night",
+          "moon",
+          checkin?.bedTime ?? null,
+          targets.bedTimeLatest,
+          true,
+        )}
+        ${renderCaloriesSignal(checkin?.calories ?? null, targets.caloriesMax)}
+      </div>
+      <div class="checkin-grid signal-rating-grid">
         ${renderScale("Mood", "mood", checkin?.mood ?? null)}
         ${renderScale("Productivity", "productivity", checkin?.productivity ?? null)}
         ${state.settings.showEnergy ? renderScale("Energy", "energy", checkin?.energy ?? null) : ""}
-      </div>
-      <div class="sleep-time-grid">
-        <label class="time-field">
-          <span class="time-icon wake">${icon("sun", 18)}</span>
-          <span><strong>Wake up</strong><small>For this day</small></span>
-          <input type="time" data-checkin-time="wakeTime" value="${escapeHtml(checkin?.wakeTime ?? "")}" aria-label="Wake up time" />
-        </label>
-        <label class="time-field">
-          <span class="time-icon bed">${icon("moon", 18)}</span>
-          <span><strong>Bedtime</strong><small>For this day</small></span>
-          <input type="time" data-checkin-time="bedTime" value="${escapeHtml(checkin?.bedTime ?? "")}" aria-label="Bedtime" />
-        </label>
       </div>
       <label class="note-field">
         <span>One-line note <small>optional</small></span>
@@ -307,6 +319,44 @@ function renderCheckin(state: AppState): string {
       </label>
     </section>
   `;
+}
+
+function renderTimeSignal(
+  field: "wakeTime" | "bedTime",
+  label: string,
+  context: string,
+  iconName: string,
+  value: string | null,
+  target: string | null,
+  bedtime: boolean,
+): string {
+  const status = !value
+    ? { tone: "empty", label: "Not recorded" }
+    : !target
+      ? { tone: "recorded", label: "Recorded" }
+      : isTimeAtOrBefore(value, target, bedtime)
+        ? { tone: "in-range", label: "In range" }
+        : { tone: "outside", label: "Outside target" };
+  return `<label class="signal-entry-card">
+    <span class="signal-entry-heading"><i class="time-icon ${field === "wakeTime" ? "wake" : "bed"}">${icon(iconName, 18)}</i><span><strong>${escapeHtml(label)}</strong><small>${escapeHtml(context)}</small></span></span>
+    <input type="time" data-checkin-time="${field}" value="${escapeHtml(value ?? "")}" aria-label="${escapeHtml(label)}" />
+    <span class="signal-entry-meta"><em class="signal-reading-status ${status.tone}">${status.label}</em><small>${target ? `Target by ${escapeHtml(formatSignalTime(target))}` : "No target"}</small></span>
+  </label>`;
+}
+
+function renderCaloriesSignal(value: number | null, target: number | null): string {
+  const status = value === null
+    ? { tone: "empty", label: "Not recorded" }
+    : target === null
+      ? { tone: "recorded", label: "Recorded" }
+      : value <= target
+        ? { tone: "in-range", label: "In range" }
+        : { tone: "outside", label: "Above target" };
+  return `<label class="signal-entry-card">
+    <span class="signal-entry-heading"><i class="time-icon calories">${icon("apple", 18)}</i><span><strong>Calories</strong><small>Daily total</small></span></span>
+    <span class="signal-number-input"><input type="number" inputmode="numeric" min="0" step="1" data-checkin-calories value="${value ?? ""}" aria-label="Calories consumed" placeholder="—"/><small>kcal</small></span>
+    <span class="signal-entry-meta"><em class="signal-reading-status ${status.tone}">${status.label}</em><small>${target === null ? "No target" : `Target ≤ ${new Intl.NumberFormat().format(target)}`}</small></span>
+  </label>`;
 }
 
 function renderScale(label: string, metric: string, value: number | null): string {

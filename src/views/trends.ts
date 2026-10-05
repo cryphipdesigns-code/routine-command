@@ -3,6 +3,7 @@ import { combinedPeriodStats, evaluateHabitDay, periodStats } from "../domain/co
 import { addDays, dateRange, dayName, todayKey } from "../domain/dates";
 import { escapeHtml, formatPercent, icon } from "../ui";
 import { activeHabits, emptyState, pageIntro } from "./shared";
+import { renderSignalSummary } from "./signal-summary";
 
 export function renderTrends(state: AppState): string {
   const habits = activeHabits(state);
@@ -43,6 +44,8 @@ export function renderTrends(state: AppState): string {
       </section>
 
       ${habits.length ? renderHabitTrends(state, habits, start, end) : emptyState("Nothing to chart", "Your trends will appear after you add habits.")}
+
+      ${renderSignalSummary(state, start, end, "30-day signal averages")}
 
       <div class="trend-lower-grid">
         ${renderCheckinChart(state, start, end)}
