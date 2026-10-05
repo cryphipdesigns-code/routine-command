@@ -18,18 +18,7 @@ export function renderHabits(state: AppState): string {
         <div class="habit-manager-list">
           ${
             habits.length
-              ? habits
-                  .map(
-                    (habit) => `<article class="habit-manager-card" style="--habit-color:${habit.color}">
-                      <div class="habit-symbol">${icon(habit.icon, 21)}</div>
-                      <div><div class="habit-name-line"><h3>${escapeHtml(habit.name)}</h3>${habit.direction === "avoid" ? '<span class="direction-badge">Avoid</span>' : ""}${habit.optional ? '<span class="optional-badge">Optional</span>' : ""}</div><p>${escapeHtml(habitMeta(state, habit))}</p></div>
-                      <div class="habit-actions">
-                        <button class="icon-button" data-action="edit-habit" data-habit-id="${habit.id}" aria-label="Edit ${escapeHtml(habit.name)}">${icon("edit", 18)}</button>
-                        <button class="icon-button" data-action="archive-habit" data-habit-id="${habit.id}" aria-label="Archive ${escapeHtml(habit.name)}">${icon("archive", 18)}</button>
-                      </div>
-                    </article>`,
-                  )
-                  .join("")
+              ? renderManagerGroups(state, habits)
               : emptyState("Start with one habit", "Choose something small enough to repeat on your hardest day.")
           }
         </div>
@@ -45,4 +34,42 @@ export function renderHabits(state: AppState): string {
       }
     </div>
   `;
+}
+
+function renderManagerGroups(state: AppState, habits: AppState["habits"]): string {
+  return (["build", "avoid"] as const)
+    .map((direction) => {
+      const directionHabits = habits.filter((habit) => habit.direction === direction);
+      if (!directionHabits.length) return "";
+      const required = directionHabits.filter((habit) => !habit.optional);
+      const optional = directionHabits.filter((habit) => habit.optional);
+      return `
+        <div class="habit-group" data-habit-group="${direction}">
+          <div class="habit-group-heading">
+            <span>${icon(direction === "build" ? "plus" : "shield", 16)} ${direction === "build" ? "Build" : "Avoid"}</span>
+            <small>${directionHabits.length}</small>
+          </div>
+          ${required.map((habit) => renderHabitManagerCard(state, habit)).join("")}
+          ${
+            optional.length
+              ? `<div class="habit-subgroup-label"><span>Optional</span></div>${optional
+                  .map((habit) => renderHabitManagerCard(state, habit))
+                  .join("")}`
+              : ""
+          }
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function renderHabitManagerCard(state: AppState, habit: AppState["habits"][number]): string {
+  return `<article class="habit-manager-card" style="--habit-color:${habit.color}">
+    <div class="habit-symbol">${icon(habit.icon, 21)}</div>
+    <div><div class="habit-name-line"><h3>${escapeHtml(habit.name)}</h3>${habit.direction === "avoid" ? '<span class="direction-badge">Avoid</span>' : ""}${habit.optional ? '<span class="optional-badge">Optional</span>' : ""}</div><p>${escapeHtml(habitMeta(state, habit))}</p></div>
+    <div class="habit-actions">
+      <button class="icon-button" data-action="edit-habit" data-habit-id="${habit.id}" aria-label="Edit ${escapeHtml(habit.name)}">${icon("edit", 18)}</button>
+      <button class="icon-button" data-action="archive-habit" data-habit-id="${habit.id}" aria-label="Archive ${escapeHtml(habit.name)}">${icon("archive", 18)}</button>
+    </div>
+  </article>`;
 }

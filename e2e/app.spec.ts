@@ -27,6 +27,35 @@ test("adds and edits a scheduled habit", async ({ page }) => {
   await expect(page.locator(".habit-manager-card", { hasText: "Meditate quietly" })).toBeVisible();
 });
 
+test("schedules a future avoid habit and groups habit types", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('[data-view="habits"]:visible').first().click();
+  await page.getByRole("button", { name: "Add habit" }).click();
+  await page.getByLabel("Name").fill("Nicotine avoid");
+  await page.getByRole("radio", { name: /Avoid/ }).check();
+  const future = await page.evaluate(() => {
+    const date = new Date();
+    date.setDate(date.getDate() + 20);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  });
+  await page.locator('input[name="startDate"]').fill(future);
+  await page.getByRole("radio", { name: "Shield" }).check();
+  await page.locator("#habitForm").getByRole("button", { name: "Add habit", exact: true }).click();
+
+  const groups = page.locator(".habit-manager-list > .habit-group");
+  await expect(groups).toHaveCount(2);
+  await expect(groups.nth(0)).toHaveAttribute("data-habit-group", "build");
+  await expect(groups.nth(1)).toHaveAttribute("data-habit-group", "avoid");
+  await expect(groups.nth(1).locator(".habit-manager-card", { hasText: "Nicotine avoid" })).toContainText("Starts");
+
+  await page.locator('[data-view="today"]:visible').first().click();
+  await expect(page.locator(".habit-check", { hasText: "Nicotine avoid" })).toHaveCount(0);
+  await expect(page.locator(".resting-panel", { hasText: "Nicotine avoid" })).toBeVisible();
+});
+
 test("tracks an avoid habit without rewarding a logged slip", async ({ page }) => {
   await page.goto("/");
   await page.locator('[data-view="habits"]:visible').first().click();
@@ -36,6 +65,10 @@ test("tracks an avoid habit without rewarding a logged slip", async ({ page }) =
   await page.locator("#habitForm").getByRole("button", { name: "Add habit", exact: true }).click();
 
   await page.locator('[data-view="today"]:visible').first().click();
+  const todayGroups = page.locator(".habit-checklist > .habit-group");
+  await expect(todayGroups).toHaveCount(2);
+  await expect(todayGroups.nth(0)).toHaveAttribute("data-habit-group", "build");
+  await expect(todayGroups.nth(1)).toHaveAttribute("data-habit-group", "avoid");
   const avoidCard = page.locator(".habit-check", { hasText: "No alcohol" });
   await expect(avoidCard.locator(".direction-badge")).toHaveText("Avoid");
   await avoidCard.getByRole("button", { name: "Stayed clear: No alcohol" }).click();
@@ -113,6 +146,7 @@ test("marks a habit optional without adding it to required progress", async ({ p
   await page.getByRole("checkbox", { name: /Optional habit/ }).check();
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.locator(".habit-manager-card", { hasText: "Sunlight" }).locator(".optional-badge")).toBeVisible();
+  await expect(page.locator('[data-habit-group="build"] .habit-subgroup-label')).toHaveText("Optional");
   await page.locator('[data-view="today"]:visible').first().click();
   const after = Number((await page.locator(".progress-ring span").textContent())?.replace("of ", ""));
   expect(after).toBe(before - 1);

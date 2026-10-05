@@ -181,6 +181,7 @@ export class TrackerStore {
 
   upsertHabit(draft: HabitDraft): void {
     const date = todayKey();
+    const requestedStart = draft.startDate && draft.startDate > date ? draft.startDate : date;
     if (!draft.id) {
       const id = crypto.randomUUID();
       const habit: Habit = {
@@ -196,7 +197,7 @@ export class TrackerStore {
         createdAt: new Date().toISOString(),
         archivedAt: null,
       };
-      const rule = ruleFromDraft(draft, id, date);
+      const rule = ruleFromDraft(draft, id, requestedStart);
       this.update({
         ...this.state,
         habits: [...this.state.habits, habit],
@@ -222,9 +223,47 @@ export class TrackerStore {
         : habit,
     );
     const currentRule = ruleForDate(this.state.rules, draft.id, date);
+    const upcomingRule = this.state.rules
+      .filter((rule) => rule.habitId === draft.id && rule.effectiveFrom > date)
+      .sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom))[0];
     let rules = [...this.state.rules];
-    if (!currentRule || !rulesMatchDraft(currentRule, draft)) {
-      if (currentRule?.effectiveFrom === date) {
+    if (requestedStart > date) {
+      if (upcomingRule) {
+        rules = rules.map((rule) =>
+          rule.id === upcomingRule.id
+            ? {
+                ...ruleFromDraft(draft, draft.id!, requestedStart, upcomingRule.id),
+                effectiveTo: upcomingRule.effectiveTo,
+              }
+            : rule,
+        );
+        if (currentRule) {
+          rules = rules.map((rule) =>
+            rule.id === currentRule.id ? { ...rule, effectiveTo: addDays(date, -1) } : rule,
+          );
+        }
+      } else if (currentRule?.effectiveFrom === date) {
+        rules = rules.map((rule) =>
+          rule.id === currentRule.id
+            ? ruleFromDraft(draft, draft.id!, requestedStart, currentRule.id)
+            : rule,
+        );
+      } else {
+        if (currentRule) {
+          rules = rules.map((rule) =>
+            rule.id === currentRule.id ? { ...rule, effectiveTo: addDays(date, -1) } : rule,
+          );
+        }
+        rules.push(ruleFromDraft(draft, draft.id, requestedStart));
+      }
+    } else if (!currentRule || !rulesMatchDraft(currentRule, draft)) {
+      if (!currentRule && upcomingRule) {
+        rules = rules.map((rule) =>
+          rule.id === upcomingRule.id
+            ? ruleFromDraft(draft, draft.id!, date, upcomingRule.id)
+            : rule,
+        );
+      } else if (currentRule?.effectiveFrom === date) {
         rules = rules.map((rule) =>
           rule.id === currentRule.id ? ruleFromDraft(draft, draft.id!, date, currentRule.id) : rule,
         );

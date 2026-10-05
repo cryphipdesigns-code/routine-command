@@ -103,6 +103,63 @@ describe("habit lifecycle", () => {
     expect(ruleForDate(store.snapshot.rules, "habit-read", "2026-10-04")?.inputType).toBe("number");
   });
 
+  it("keeps a new habit out of compliance until its optional start date", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 5, 12));
+    const store = new TrackerStore(new MemoryRepository());
+    await store.initialize();
+
+    store.upsertHabit({
+      startDate: "2026-10-25",
+      name: "Nicotine avoid",
+      inputType: "boolean",
+      unit: "",
+      icon: "shield",
+      color: "#64748b",
+      optional: false,
+      direction: "avoid",
+      weekdays: [0, 1, 2, 3, 4, 5, 6],
+      comparator: "checked",
+      targetMin: null,
+      targetMax: null,
+    });
+
+    const habit = store.snapshot.habits.find((item) => item.name === "Nicotine avoid");
+    expect(habit).toBeDefined();
+    expect(ruleForDate(store.snapshot.rules, habit!.id, "2026-10-24")).toBeNull();
+    expect(ruleForDate(store.snapshot.rules, habit!.id, "2026-10-25")?.direction).toBe("avoid");
+  });
+
+  it("reschedules an active habit without rewriting its earlier history", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 5, 12));
+    const store = new TrackerStore(new MemoryRepository());
+    await store.initialize();
+
+    vi.setSystemTime(new Date(2026, 9, 10, 12));
+    store.upsertHabit({
+      id: "habit-cold",
+      startDate: "2026-10-25",
+      name: "Cold",
+      inputType: "boolean",
+      unit: "",
+      icon: "snowflake",
+      color: "#2485a8",
+      optional: false,
+      direction: "build",
+      weekdays: [0, 1, 2, 3, 4, 5, 6],
+      comparator: "checked",
+      targetMin: null,
+      targetMax: null,
+    });
+
+    expect(ruleForDate(store.snapshot.rules, "habit-cold", "2026-10-09")).not.toBeNull();
+    expect(ruleForDate(store.snapshot.rules, "habit-cold", "2026-10-10")).toBeNull();
+    expect(ruleForDate(store.snapshot.rules, "habit-cold", "2026-10-24")).toBeNull();
+    expect(ruleForDate(store.snapshot.rules, "habit-cold", "2026-10-25")?.effectiveFrom).toBe("2026-10-25");
+    expect(store.snapshot.habits.find((habit) => habit.id === "habit-cold")?.icon).toBe("snowflake");
+  });
+
   it("keeps archived gaps out of the active schedule when a habit is restored", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 9, 2, 12));

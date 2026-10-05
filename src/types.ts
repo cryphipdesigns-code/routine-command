@@ -121,6 +121,7 @@ export interface PeriodStats {
 
 export interface HabitDraft {
   id?: string;
+  startDate?: string | null;
   name: string;
   inputType: InputType;
   unit: string;

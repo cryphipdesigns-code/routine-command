@@ -1,7 +1,7 @@
 import type { AppState, Comparator, ExerciseDetails, Habit, HabitDraft, HabitDirection, InputType } from "./types";
 import { CloudSyncController, type CloudSyncSnapshot } from "./data/cloud-sync";
 import { evaluateHabitDay, ruleForDate } from "./domain/compliance";
-import { addDays, dayName, todayKey } from "./domain/dates";
+import { addDays, dayName, formatShortDate, todayKey } from "./domain/dates";
 import {
   isDaySecured,
   isRecoveryCompletion,
@@ -13,8 +13,68 @@ import { escapeHtml, icon } from "./ui";
 import { renderCloudSync } from "./views/settings";
 import { renderShell, renderSyncStatus } from "./views/shell";
 
-const HABIT_COLORS = ["#3867d6", "#0f9f82", "#d97706", "#db5c5c", "#7c5ce0", "#2485a8"];
-const HABIT_ICONS = ["target", "book-open", "sun", "activity", "flame", "droplet", "moon", "heart"];
+const HABIT_COLORS = [
+  "#3867d6",
+  "#0f9f82",
+  "#d97706",
+  "#db5c5c",
+  "#7c5ce0",
+  "#2485a8",
+  "#c13f75",
+  "#64748b",
+  "#7a5c3e",
+  "#65a30d",
+];
+const HABIT_COLOR_NAMES: Record<string, string> = {
+  "#3867d6": "Command blue",
+  "#0f9f82": "Emerald",
+  "#d97706": "Amber",
+  "#db5c5c": "Coral",
+  "#7c5ce0": "Violet",
+  "#2485a8": "Ocean",
+  "#c13f75": "Berry",
+  "#64748b": "Slate",
+  "#7a5c3e": "Walnut",
+  "#65a30d": "Leaf",
+};
+const HABIT_ICONS = [
+  "target",
+  "book-open",
+  "sun",
+  "activity",
+  "dumbbell",
+  "flame",
+  "apple",
+  "droplet",
+  "snowflake",
+  "moon",
+  "heart",
+  "shield",
+  "ban",
+  "wine",
+  "wallet",
+  "footprints",
+  "brain",
+];
+const HABIT_ICON_NAMES: Record<string, string> = {
+  target: "Target",
+  "book-open": "Open book",
+  sun: "Sun",
+  activity: "Activity",
+  dumbbell: "Dumbbell",
+  flame: "Flame",
+  apple: "Apple",
+  droplet: "Droplet",
+  snowflake: "Snowflake",
+  moon: "Moon",
+  heart: "Heart",
+  shield: "Shield",
+  ban: "Prohibited symbol",
+  wine: "Wine glass",
+  wallet: "Wallet",
+  footprints: "Footsteps",
+  brain: "Mind",
+};
 
 export class TrackerApp {
   private modalHabitId: string | null = null;
@@ -337,6 +397,7 @@ export class TrackerApp {
     const minimum = numberOrNull(data.get("targetMin"));
     const maximum = numberOrNull(data.get("targetMax"));
     const name = String(data.get("name") ?? "").trim();
+    const startDate = String(data.get("startDate") ?? "").trim();
 
     if (!name) {
       this.toast("Give the habit a name");
@@ -350,9 +411,14 @@ export class TrackerApp {
       this.toast("Add the target value needed for this rule");
       return;
     }
+    if (startDate && (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || startDate < todayKey())) {
+      this.toast("Choose today or a future start date");
+      return;
+    }
 
     const draft: HabitDraft = {
       id: this.modalHabitId || undefined,
+      startDate: startDate || null,
       name,
       inputType,
       unit: String(data.get("unit") ?? ""),
@@ -367,7 +433,13 @@ export class TrackerApp {
     };
     this.modalHabitId = null;
     this.store.upsertHabit(draft);
-    this.toast(draft.id ? "Habit updated from today forward" : "Habit added");
+    this.toast(
+      startDate > todayKey()
+        ? `Habit scheduled for ${formatShortDate(startDate)}`
+        : draft.id
+          ? "Habit updated from today forward"
+          : "Habit added",
+    );
   }
 
   private openHabitModal(habitId?: string): void {
@@ -384,7 +456,14 @@ export class TrackerApp {
   private showHabitModal(habitId?: string): void {
     const state = this.store.snapshot;
     const habit = habitId ? state.habits.find((item) => item.id === habitId) : undefined;
-    const rule = habit ? ruleForDate(state.rules, habit.id, todayKey()) : null;
+    const activeRule = habit ? ruleForDate(state.rules, habit.id, todayKey()) : null;
+    const upcomingRule = habit
+      ? state.rules
+          .filter((item) => item.habitId === habit.id && item.effectiveFrom > todayKey())
+          .sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom))[0]
+      : undefined;
+    const rule = activeRule ?? upcomingRule ?? null;
+    const startDate = !activeRule && upcomingRule ? upcomingRule.effectiveFrom : "";
     const inputType = rule?.inputType ?? habit?.inputType ?? "boolean";
     const direction: HabitDirection = rule?.direction ?? habit?.direction ?? "build";
     const unit = rule?.unit ?? habit?.unit ?? "";
@@ -405,9 +484,10 @@ export class TrackerApp {
             <div class="target-fields"><label class="field"><span>Minimum / target</span><input type="number" step="any" min="0" name="targetMin" value="${rule?.targetMin ?? ""}" placeholder="15" /></label><label class="field"><span>Maximum</span><input type="number" step="any" min="0" name="targetMax" value="${rule?.targetMax ?? ""}" placeholder="2200" /></label></div>
           </div>
           <fieldset class="form-group"><div class="legend-row"><legend>Scheduled days</legend><span><button type="button" data-action="all-weekdays">Weekdays</button><button type="button" data-action="every-day">Every day</button></span></div><div class="weekday-picker">${[0, 1, 2, 3, 4, 5, 6].map((day) => `<label><input type="checkbox" name="weekdays" value="${day}" ${weekdays.includes(day) ? "checked" : ""}/><span>${dayName(day, "narrow")}</span></label>`).join("")}</div></fieldset>
+          <label class="field"><span>Start / resume date <small>Optional</small></span><input type="date" name="startDate" min="${todayKey()}" value="${startDate}"/><small class="field-hint">${activeRule ? "Choose a future date to pause this habit until then. Leave blank to keep it active." : "Leave blank to begin today."}</small></label>
           <label class="optional-toggle" style="--habit-preview:${habit?.color ?? HABIT_COLORS[0]}"><span><strong>Optional habit</strong><small>Track it without lowering adherence when it is missed.</small></span><input type="checkbox" name="optional" ${habit?.optional ? "checked" : ""}/><i></i></label>
-          <fieldset class="form-group"><legend>Style</legend><div class="style-picker"><div class="color-picker">${HABIT_COLORS.map((color) => `<label style="--choice:${color}"><input type="radio" name="color" value="${color}" ${color === (habit?.color ?? HABIT_COLORS[0]) ? "checked" : ""}/><span></span></label>`).join("")}</div><div class="icon-picker">${HABIT_ICONS.map((item) => `<label><input type="radio" name="icon" value="${item}" ${item === (habit?.icon ?? "target") ? "checked" : ""}/><span>${icon(item, 19)}</span></label>`).join("")}</div></div></fieldset>
-          ${habit ? '<p class="version-note">Schedule, target, and recording changes take effect today. Earlier records keep their original rules.</p>' : ""}
+          <fieldset class="form-group"><legend>Style</legend><div class="style-picker"><div class="color-picker">${HABIT_COLORS.map((color) => `<label style="--choice:${color}" title="${HABIT_COLOR_NAMES[color]}"><input type="radio" name="color" value="${color}" aria-label="${HABIT_COLOR_NAMES[color]}" ${color === (habit?.color ?? HABIT_COLORS[0]) ? "checked" : ""}/><span></span></label>`).join("")}</div><div class="icon-picker">${HABIT_ICONS.map((item) => `<label title="${HABIT_ICON_NAMES[item]}"><input type="radio" name="icon" value="${item}" aria-label="${HABIT_ICON_NAMES[item]}" ${item === (habit?.icon ?? "target") ? "checked" : ""}/><span>${icon(item, 19)}</span></label>`).join("")}</div></div></fieldset>
+          ${habit ? '<p class="version-note">Earlier records keep their original rules. A future start date pauses this habit until that day.</p>' : ""}
           <footer><button type="button" class="secondary-button" data-action="close-modal">Cancel</button><button type="submit" class="primary-button">${habit ? "Save changes" : "Add habit"}</button></footer>
         </form>
       </section>

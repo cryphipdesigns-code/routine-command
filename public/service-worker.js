@@ -1,4 +1,4 @@
-const CACHE_NAME = "routine-command-shell-v4";
+const CACHE_NAME = "routine-command-shell-v5";
 const scopePath = new URL(self.registration.scope).pathname;
 const APP_SHELL = [scopePath, `${scopePath}manifest.webmanifest`, `${scopePath}icon.svg`];
 

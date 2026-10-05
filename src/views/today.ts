@@ -62,7 +62,7 @@ export function renderToday(state: AppState): string {
         <div class="habit-checklist">
           ${
             scheduled.length
-              ? scheduled.map(({ habit, evaluation }) => renderHabitCheck(state, habit, evaluation.status)).join("")
+              ? renderTodayHabitGroups(state, scheduled)
               : emptyState("A clear day", "Nothing is scheduled. Rest is part of a sustainable plan.")
           }
         </div>
@@ -84,6 +84,36 @@ export function renderToday(state: AppState): string {
       }
     </div>
   `;
+}
+
+function renderTodayHabitGroups(
+  state: AppState,
+  items: Array<{ habit: Habit; evaluation: { status: string } }>,
+): string {
+  return (["build", "avoid"] as const)
+    .map((direction) => {
+      const directionItems = items.filter((item) => item.habit.direction === direction);
+      if (!directionItems.length) return "";
+      const required = directionItems.filter((item) => !item.habit.optional);
+      const optional = directionItems.filter((item) => item.habit.optional);
+      return `
+        <div class="habit-group" data-habit-group="${direction}">
+          <div class="habit-group-heading">
+            <span>${icon(direction === "build" ? "plus" : "shield", 16)} ${direction === "build" ? "Build" : "Avoid"}</span>
+            <small>${directionItems.length}</small>
+          </div>
+          ${required.map(({ habit, evaluation }) => renderHabitCheck(state, habit, evaluation.status)).join("")}
+          ${
+            optional.length
+              ? `<div class="habit-subgroup-label"><span>Optional</span></div>${optional
+                  .map(({ habit, evaluation }) => renderHabitCheck(state, habit, evaluation.status))
+                  .join("")}`
+              : ""
+          }
+        </div>
+      `;
+    })
+    .join("");
 }
 
 function renderHabitCheck(state: AppState, habit: Habit, status: string): string {
