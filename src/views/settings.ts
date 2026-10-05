@@ -19,6 +19,17 @@ export function renderSettings(state: AppState, sync: CloudSyncSnapshot): string
           <div class="setting-row"><div><strong>Local timezone</strong><span>Daily boundaries follow this device</span></div><span class="setting-value">${escapeHtml(state.settings.timezone)}</span></div>
         </div>
 
+        <div class="section-block settings-card motivation-settings">
+          <div class="section-heading"><div><p class="eyebrow">Motivation</p><h2>Reward vault</h2></div><span class="status-pill automatic">Rolling 7 days</span></div>
+          <label class="field"><span>Personal reward</span><input type="text" data-setting="personalReward" value="${escapeHtml(state.settings.personalReward)}" maxlength="80" placeholder="e.g. Guilt-free movie night" /></label>
+          <label class="field reward-target-field"><span>Unlock target</span><select data-setting="rewardTarget">
+            ${[0.7, 0.8, 0.9, 1].map((target) => `<option value="${target}" ${state.settings.rewardTarget === target ? "selected" : ""}>${Math.round(target * 100)}% adherence</option>`).join("")}
+          </select></label>
+          <p class="settings-note">Unlocks after at least five eligible days in the last seven. Recovery counts; perfection is not required.</p>
+          <div class="setting-row home-cue-row"><div><strong>Home Screen count</strong><span>Badge the app icon with required habits remaining</span></div>${state.settings.appBadgeEnabled ? '<button class="secondary-button small" data-action="disable-app-badge">Disable</button>' : '<button class="secondary-button small" data-action="enable-app-badge">Enable</button>'}</div>
+          <p class="settings-note">Free widget alternative. On iPhone, enable this from the installed Home Screen app; Apple requires notification permission for icon badges.</p>
+        </div>
+
         <div class="section-block settings-card">
           <div class="section-heading"><div><p class="eyebrow">Check-in</p><h2>Daily signals</h2></div></div>
           <label class="setting-row toggle-row"><div><strong>Track energy</strong><span>Add a third 1–5 daily rating</span></div><input type="checkbox" data-setting="showEnergy" ${state.settings.showEnergy ? "checked" : ""}/><i></i></label>

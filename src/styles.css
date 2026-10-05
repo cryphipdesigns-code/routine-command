@@ -485,6 +485,65 @@ h3 {
 .progress-ring strong { font-size: 1.35rem; line-height: 1; }
 .progress-ring span { margin-top: 2px; color: var(--muted); font-size: 0.68rem; }
 
+.daily-progress.energy-gained .progress-ring {
+  animation: energy-gained 620ms cubic-bezier(0.22, 1.25, 0.36, 1);
+}
+
+@keyframes energy-gained {
+  0% { transform: scale(0.92); box-shadow: 0 0 0 rgba(49, 100, 216, 0); }
+  45% { transform: scale(1.08); box-shadow: 0 0 0 11px rgba(49, 100, 216, 0.1); }
+  100% { transform: scale(1); box-shadow: 0 0 0 rgba(49, 100, 216, 0); }
+}
+
+.momentum-card {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.72fr) minmax(320px, 1.28fr);
+  align-items: center;
+  gap: 20px 28px;
+  padding: 22px 24px;
+  background:
+    radial-gradient(circle at 8% 15%, rgba(49, 100, 216, 0.1), transparent 30%),
+    var(--panel);
+}
+
+.momentum-copy { display: grid; gap: 6px; }
+.rank-line { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px 10px; }
+.rank-line h2 { font-size: 1.35rem; }
+.rank-line span { color: var(--quiet); font-size: 0.66rem; font-weight: 700; text-transform: uppercase; }
+.momentum-copy > p:last-child { color: var(--muted); font-size: 0.73rem; }
+
+.momentum-trail {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.momentum-day { display: grid; place-items: center; gap: 4px; min-width: 0; }
+.momentum-day i { display: grid; place-items: center; width: 31px; height: 31px; border: 1px solid var(--line); border-radius: 50%; color: var(--quiet); background: var(--panel-muted); }
+.momentum-day small { color: var(--quiet); font-size: 0.6rem; font-weight: 750; }
+.momentum-day.secured i { color: white; border-color: var(--success); background: var(--success); box-shadow: 0 5px 13px rgba(17, 149, 121, 0.2); }
+.momentum-day.partial i { border-color: #efc875; background: var(--warning-soft); }
+.momentum-day.open i { border-color: var(--line-strong); background: var(--accent-soft); }
+.momentum-day.rest i { border-style: dashed; opacity: 0.58; }
+
+.reward-vault {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 13px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 13px;
+  background: rgba(244, 247, 250, 0.75);
+}
+
+.reward-vault > span { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; color: var(--accent); background: var(--accent-soft); }
+.reward-vault > div { display: grid; gap: 2px; }
+.reward-vault strong { font-size: 0.76rem; }
+.reward-vault small { color: var(--muted); font-size: 0.65rem; }
+.reward-vault.unlocked { border-style: solid; border-color: #afe0d3; background: var(--success-soft); }
+.reward-vault.unlocked > span { color: white; background: var(--success); }
+
 .habit-checklist,
 .habit-manager-list {
   display: grid;
@@ -508,6 +567,40 @@ h3 {
 .habit-check:hover,
 .habit-manager-card:hover { border-color: var(--line-strong); background: white; }
 .habit-check.habit-status-success { border-color: color-mix(in srgb, var(--habit-color), white 70%); background: color-mix(in srgb, var(--habit-color), white 94%); }
+
+.habit-check.just-completed {
+  position: relative;
+  overflow: hidden;
+  animation: completion-pulse 560ms cubic-bezier(0.2, 1.25, 0.3, 1);
+}
+
+.habit-check.just-completed::after {
+  position: absolute;
+  inset: -60%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--habit-color), transparent 72%), transparent 54%);
+  pointer-events: none;
+  content: "";
+  animation: completion-wave 650ms ease-out both;
+}
+
+.habit-check.just-completed .completion-button.is-complete { animation: check-pop 580ms cubic-bezier(0.2, 1.5, 0.3, 1); }
+
+@keyframes completion-pulse {
+  0% { transform: scale(0.985); }
+  48% { transform: scale(1.012); }
+  100% { transform: scale(1); }
+}
+
+@keyframes completion-wave {
+  from { opacity: 0.78; transform: scale(0.15); }
+  to { opacity: 0; transform: scale(1); }
+}
+
+@keyframes check-pop {
+  0% { transform: scale(0.65) rotate(-10deg); }
+  52% { transform: scale(1.18) rotate(3deg); }
+  100% { transform: scale(1) rotate(0); }
+}
 
 .exercise-details {
   grid-column: 1 / -1;
@@ -572,6 +665,7 @@ h3 {
 }
 
 .optional-badge,
+.direction-badge,
 .inline-optional {
   display: inline-flex;
   align-items: center;
@@ -587,6 +681,12 @@ h3 {
   line-height: 1;
   text-transform: uppercase;
   background: color-mix(in srgb, var(--habit-color), white 88%);
+}
+
+.direction-badge {
+  border-color: #cfc5f5;
+  color: #5a43a5;
+  background: #f0edff;
 }
 
 .inline-optional { margin-left: 7px; vertical-align: 1px; }
@@ -620,6 +720,12 @@ h3 {
 .completion-button:not(:disabled):hover { border-color: var(--habit-color); color: color-mix(in srgb, var(--habit-color), transparent 35%); }
 .completion-button.is-complete { color: white; border-color: var(--habit-color); background: var(--habit-color); box-shadow: 0 7px 19px color-mix(in srgb, var(--habit-color), transparent 72%); }
 .completion-button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.avoid-actions { display: flex; align-items: center; gap: 6px; }
+.avoid-actions .completion-button { width: 43px; height: 43px; }
+.slip-button { display: grid; place-items: center; width: 29px; height: 29px; border: 1px solid #e1c8cc; border-radius: 50%; color: #b05a64; background: #fff7f8; }
+.slip-button.is-slip { color: white; border-color: var(--danger); background: var(--danger); }
+.slip-button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .number-entry {
   display: flex;
@@ -922,6 +1028,10 @@ h3 {
 .sync-code-form { grid-template-columns: minmax(0, 1fr) minmax(120px, 0.45fr) auto; margin-top: 11px; }
 .sync-code-form .secondary-button { white-space: nowrap; }
 .integration-card > p { color: var(--muted); font-size: 0.78rem; line-height: 1.55; }
+.motivation-settings { display: grid; gap: 13px; }
+.motivation-settings .section-heading { margin-bottom: 2px; }
+.reward-target-field { margin-top: 2px; }
+.home-cue-row { margin-top: 2px; }
 .integration-preview { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 17px; }
 .integration-preview span { display: flex; align-items: center; gap: 7px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); font-size: 0.72rem; background: var(--panel-muted); }
 .danger-zone { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 18px 22px; border-color: rgba(209, 75, 86, 0.12); }
@@ -1026,7 +1136,22 @@ h3 {
 
 #toastRoot { position: fixed; right: 24px; bottom: 24px; z-index: 200; }
 .toast { display: flex; align-items: center; gap: 8px; padding: 12px 15px; border: 1px solid rgba(255, 255, 255, 0.4); border-radius: 12px; color: white; font-size: 0.77rem; font-weight: 700; background: #243248; box-shadow: 0 14px 38px rgba(20, 30, 45, 0.24); animation: toast-in 180ms ease; }
+.toast.recovery { background: linear-gradient(135deg, #3265c9, #7556c7); }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
+.celebration { position: fixed; top: 50%; left: 50%; z-index: 190; display: grid; place-items: center; width: min(360px, calc(100% - 34px)); padding: 27px 24px 25px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.8); border-radius: 24px; color: var(--ink); text-align: center; background: rgba(255, 255, 255, 0.97); box-shadow: 0 30px 90px rgba(24, 39, 61, 0.28); transform: translate(-50%, -50%); animation: celebration-in 280ms cubic-bezier(0.2, 1.2, 0.3, 1) both, celebration-out 320ms ease 2.35s both; backdrop-filter: blur(16px); }
+.celebration::before { position: absolute; inset: 0; background: radial-gradient(circle at 50% 0%, rgba(49, 100, 216, 0.16), transparent 58%); pointer-events: none; content: ""; }
+.celebration.rare::before { background: radial-gradient(circle at 50% 0%, rgba(124, 92, 224, 0.24), transparent 62%); }
+.celebration-mark { display: grid; place-items: center; width: 58px; height: 58px; margin-bottom: 13px; border-radius: 19px; color: white; background: linear-gradient(145deg, var(--accent), #6e57da); box-shadow: 0 12px 28px rgba(49, 100, 216, 0.3); }
+.celebration > strong { position: relative; margin-top: 6px; font-size: 1.55rem; }
+.celebration > span:not(.celebration-mark) { position: relative; max-width: 280px; margin-top: 7px; color: var(--muted); font-size: 0.78rem; line-height: 1.5; }
+.celebration .spark { position: absolute; width: 7px; height: 7px; border-radius: 2px; background: var(--accent); transform: rotate(45deg); animation: spark-float 1.4s ease-in-out infinite alternate; }
+.celebration .spark-one { top: 23px; left: 28px; }
+.celebration .spark-two { top: 39px; right: 35px; animation-delay: -0.45s; background: var(--success); }
+.celebration .spark-three { right: 62px; bottom: 24px; animation-delay: -0.8s; background: #d97706; }
+.celebration .spark-four { bottom: 38px; left: 53px; animation-delay: -1.1s; background: #7c5ce0; }
+@keyframes celebration-in { from { opacity: 0; transform: translate(-50%, -46%) scale(0.86); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+@keyframes celebration-out { to { opacity: 0; transform: translate(-50%, -54%) scale(0.96); } }
+@keyframes spark-float { to { transform: translateY(-8px) rotate(90deg) scale(1.25); } }
 .offline-banner { position: fixed; z-index: 80; left: 50%; bottom: 18px; display: flex; align-items: center; gap: 7px; padding: 9px 13px; border-radius: 99px; color: white; font-size: 0.69rem; font-weight: 700; background: #38465a; box-shadow: var(--shadow-md); transform: translateX(-50%); }
 .offline-banner[hidden] { display: none; }
 
@@ -1068,11 +1193,17 @@ h3 {
   .progress-ring { width: 78px; height: 78px; }
   .progress-ring::before { width: 61px; height: 61px; }
   .daily-progress h2 { font-size: 1.12rem; }
+  .momentum-card { grid-template-columns: 1fr; gap: 17px; padding: 18px 16px; }
+  .momentum-trail { gap: 4px; }
+  .momentum-day i { width: 29px; height: 29px; }
   .habit-check { padding: 12px; gap: 11px; }
   .habit-check,
   .habit-manager-card { padding-block: 9px; }
   .habit-symbol { width: 39px; height: 39px; border-radius: 12px; }
   .completion-button { width: 44px; height: 44px; }
+  .avoid-actions { gap: 4px; }
+  .avoid-actions .completion-button { width: 40px; height: 40px; }
+  .slip-button { width: 27px; height: 27px; }
   .number-entry { min-width: 94px; padding-inline: 6px; }
   .number-entry input { width: 53px; }
   .rating-row { grid-template-columns: 1fr; gap: 8px; }

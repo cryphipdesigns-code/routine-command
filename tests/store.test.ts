@@ -66,6 +66,9 @@ describe("habit lifecycle", () => {
     expect(upgradedStore.snapshot.habits.find((habit) => habit.id === "habit-sunlight")?.name).toBe("My saved sunlight habit");
     expect(upgradedStore.snapshot.habits.find((habit) => habit.id === "habit-read")?.name).toBe("15 min Read");
     expect(upgradedStore.snapshot.habits[0]?.optional).toBe(false);
+    expect(upgradedStore.snapshot.habits[0]?.direction).toBe("build");
+    expect(upgradedStore.snapshot.settings.personalReward).toBe("");
+    expect(upgradedStore.snapshot.settings.rewardTarget).toBe(0.8);
     expect(ruleForDate(upgradedStore.snapshot.rules, "habit-read", "2026-10-02")?.inputType).toBe("boolean");
     expect(upgradedStore.snapshot.habits.some((habit) => habit.id === "habit-read-bible")).toBe(true);
     expect(upgradedStore.snapshot.habits.some((habit) => habit.id === "habit-bom")).toBe(true);
@@ -89,6 +92,7 @@ describe("habit lifecycle", () => {
       icon: "book-open",
       color: "#3867d6",
       optional: false,
+      direction: "build",
       weekdays: [0, 1, 2, 3, 4, 5, 6],
       comparator: "gte",
       targetMin: 15,

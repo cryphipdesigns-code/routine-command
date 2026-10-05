@@ -82,7 +82,12 @@ export function evaluateHabitDay(params: {
     return { status: "not-scheduled", applicable: false, successful: false, rule, log };
   }
 
-  if (log) {
+  const hasRecordedValue =
+    rule.inputType === "boolean"
+      ? log?.booleanValue !== null && log?.booleanValue !== undefined
+      : log?.numericValue !== null && log?.numericValue !== undefined;
+
+  if (log && hasRecordedValue) {
     const successful = isSuccessful(habit, rule, log);
     return {
       status: successful ? "success" : "off-target",
@@ -94,14 +99,14 @@ export function evaluateHabitDay(params: {
   }
 
   if (isFuture(localDate, currentToday)) {
-    return { status: "upcoming", applicable: true, successful: false, rule, log: null };
+    return { status: "upcoming", applicable: true, successful: false, rule, log };
   }
 
   if (isPast(localDate, currentToday)) {
-    return { status: "missed", applicable: true, successful: false, rule, log: null };
+    return { status: "missed", applicable: true, successful: false, rule, log };
   }
 
-  return { status: "pending", applicable: true, successful: false, rule, log: null };
+  return { status: "pending", applicable: true, successful: false, rule, log };
 }
 
 export function periodStats(params: {
@@ -168,7 +173,7 @@ export function combinedPeriodStats(params: {
 }
 
 export function targetLabel(_habit: Habit, rule: HabitRule): string {
-  if (rule.inputType === "boolean") return "Complete";
+  if (rule.inputType === "boolean") return rule.direction === "avoid" ? "Avoid today" : "Complete";
   const unit = rule.unit ? ` ${rule.unit}` : "";
   switch (rule.comparator) {
     case "gte":

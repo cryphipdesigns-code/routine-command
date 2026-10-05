@@ -5,6 +5,7 @@ const DATABASE_VERSION = 1;
 const STORE_NAME = "snapshots";
 const STATE_KEY = "current";
 const FALLBACK_KEY = "trackerLocalStateV1";
+const MIRROR_KEY = "routineCommandStateMirrorV1";
 
 export interface StateRepository {
   load(): Promise<AppState | null>;
@@ -14,6 +15,8 @@ export interface StateRepository {
 
 export class IndexedDbStateRepository implements StateRepository {
   async load(): Promise<AppState | null> {
+    const mirror = loadStoredState(MIRROR_KEY);
+    if (mirror) return mirror;
     try {
       const database = await openDatabase();
       return await new Promise((resolve, reject) => {
@@ -24,12 +27,13 @@ export class IndexedDbStateRepository implements StateRepository {
       });
     } catch (error) {
       console.warn("IndexedDB unavailable; using local storage.", error);
-      return loadFallback();
+      return loadStoredState(FALLBACK_KEY);
     }
   }
 
   async save(state: AppState): Promise<void> {
     const snapshot = structuredClone(state);
+    saveMirror(snapshot);
     try {
       const database = await openDatabase();
       await new Promise<void>((resolve, reject) => {
@@ -40,12 +44,12 @@ export class IndexedDbStateRepository implements StateRepository {
       });
     } catch (error) {
       console.warn("Could not save to IndexedDB; using local storage.", error);
-      localStorage.setItem(FALLBACK_KEY, JSON.stringify(snapshot));
     }
   }
 
   async clear(): Promise<void> {
     localStorage.removeItem(FALLBACK_KEY);
+    localStorage.removeItem(MIRROR_KEY);
     try {
       const database = await openDatabase();
       await new Promise<void>((resolve, reject) => {
@@ -74,11 +78,19 @@ function openDatabase(): Promise<IDBDatabase> {
   });
 }
 
-function loadFallback(): AppState | null {
+function loadStoredState(key: string): AppState | null {
   try {
-    const value = localStorage.getItem(FALLBACK_KEY);
+    const value = localStorage.getItem(key);
     return value ? (JSON.parse(value) as AppState) : null;
   } catch {
     return null;
+  }
+}
+
+function saveMirror(state: AppState): void {
+  try {
+    localStorage.setItem(MIRROR_KEY, JSON.stringify(state));
+  } catch (error) {
+    console.warn("Could not mirror Routine Command state to local storage.", error);
   }
 }

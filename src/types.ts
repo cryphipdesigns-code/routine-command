@@ -1,6 +1,7 @@
 export type ViewId = "today" | "review" | "trends" | "habits" | "settings";
 export type ReviewMode = "week" | "month";
 export type InputType = "boolean" | "number";
+export type HabitDirection = "build" | "avoid";
 export type Comparator = "checked" | "gte" | "lte" | "between" | "exact";
 export type LogSource = "manual" | "apple-health" | "health-connect" | "import";
 
@@ -19,6 +20,7 @@ export interface Habit {
   icon: string;
   color: string;
   optional: boolean;
+  direction: HabitDirection;
   sortOrder: number;
   createdAt: string;
   archivedAt: string | null;
@@ -31,6 +33,7 @@ export interface HabitRule {
   effectiveTo: string | null;
   inputType: InputType;
   unit: string;
+  direction: HabitDirection;
   weekdays: number[];
   comparator: Comparator;
   targetMin: number | null;
@@ -73,10 +76,13 @@ export interface UserSettings {
   weekStartsOn: 0 | 1;
   timezone: string;
   showEnergy: boolean;
+  appBadgeEnabled: boolean;
+  personalReward: string;
+  rewardTarget: number;
 }
 
 export interface AppState {
-  schemaVersion: 4;
+  schemaVersion: 5;
   activeView: ViewId;
   selectedDate: string;
   reviewAnchor: string;
@@ -121,6 +127,7 @@ export interface HabitDraft {
   icon: string;
   color: string;
   optional: boolean;
+  direction: HabitDirection;
   weekdays: number[];
   comparator: Comparator;
   targetMin: number | null;

@@ -191,6 +191,7 @@ export class TrackerStore {
         icon: draft.icon,
         color: draft.color,
         optional: draft.optional,
+        direction: draft.direction,
         sortOrder: this.state.habits.length,
         createdAt: new Date().toISOString(),
         archivedAt: null,
@@ -216,6 +217,7 @@ export class TrackerStore {
             icon: draft.icon,
             color: draft.color,
             optional: draft.optional,
+            direction: draft.direction,
           }
         : habit,
     );
@@ -233,8 +235,9 @@ export class TrackerStore {
         rules.push(ruleFromDraft(draft, draft.id, date));
       }
     }
-    const changedInputType = existingHabit.inputType !== draft.inputType;
-    const logs = changedInputType
+    const changedRecordingMeaning =
+      existingHabit.inputType !== draft.inputType || existingHabit.direction !== draft.direction;
+    const logs = changedRecordingMeaning
       ? this.state.logs.filter(
           (log) => !(log.habitId === draft.id && log.localDate === date),
         )
@@ -365,6 +368,7 @@ function ruleFromDraft(
     effectiveTo: null,
     inputType: draft.inputType,
     unit: draft.inputType === "number" ? draft.unit.trim() : "",
+    direction: draft.direction,
     weekdays: [...draft.weekdays].sort(),
     comparator: draft.inputType === "boolean" ? "checked" : draft.comparator,
     targetMin: draft.inputType === "boolean" ? null : draft.targetMin,
@@ -376,6 +380,7 @@ function rulesMatchDraft(rule: HabitRule, draft: HabitDraft): boolean {
   return (
     rule.inputType === draft.inputType &&
     rule.unit === (draft.inputType === "number" ? draft.unit.trim() : "") &&
+    rule.direction === draft.direction &&
     rule.comparator === (draft.inputType === "boolean" ? "checked" : draft.comparator) &&
     rule.targetMin === (draft.inputType === "boolean" ? null : draft.targetMin) &&
     rule.targetMax === (draft.inputType === "boolean" ? null : draft.targetMax) &&
@@ -387,16 +392,22 @@ function normalizeState(state: AppState): AppState {
   const base = defaultState();
   const activeViews: ViewId[] = ["today", "review", "trends", "habits", "settings"];
   const savedVersion = Number((state as { schemaVersion?: number }).schemaVersion ?? 1);
-  let habits = Array.isArray(state.habits)
-    ? state.habits.map((habit) => ({ ...habit, optional: Boolean(habit.optional) }))
+  let habits: Habit[] = Array.isArray(state.habits)
+    ? state.habits.map((habit) => ({
+        ...habit,
+        optional: Boolean(habit.optional),
+        direction: habit.direction === "avoid" ? ("avoid" as const) : ("build" as const),
+      }))
     : base.habits;
-  let rules = Array.isArray(state.rules)
+  let rules: HabitRule[] = Array.isArray(state.rules)
     ? state.rules.map((rule) => {
         const habit = habits.find((item) => item.id === rule.habitId);
         return {
           ...rule,
           inputType: rule.inputType ?? habit?.inputType ?? "boolean",
           unit: rule.unit ?? habit?.unit ?? "",
+          direction:
+            rule.direction === "avoid" ? ("avoid" as const) : habit?.direction ?? ("build" as const),
         };
       })
     : base.rules;
@@ -419,7 +430,7 @@ function normalizeState(state: AppState): AppState {
   return {
     ...base,
     ...state,
-    schemaVersion: 4,
+    schemaVersion: 5,
     activeView: activeViews.includes(state.activeView) ? state.activeView : "today",
     selectedDate: state.selectedDate || todayKey(),
     reviewAnchor: state.reviewAnchor || todayKey(),
@@ -438,6 +449,17 @@ function normalizeState(state: AppState): AppState {
       weekStartsOn: state.settings?.weekStartsOn === 0 ? 0 : 1,
       timezone: state.settings?.timezone || base.settings.timezone,
       showEnergy: Boolean(state.settings?.showEnergy),
+      appBadgeEnabled: Boolean(state.settings?.appBadgeEnabled),
+      personalReward:
+        typeof state.settings?.personalReward === "string"
+          ? state.settings.personalReward.slice(0, 80)
+          : "",
+      rewardTarget:
+        typeof state.settings?.rewardTarget === "number" &&
+        state.settings.rewardTarget >= 0.5 &&
+        state.settings.rewardTarget <= 1
+          ? state.settings.rewardTarget
+          : 0.8,
     },
   };
 }

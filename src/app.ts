@@ -1,7 +1,13 @@
-import type { AppState, Comparator, ExerciseDetails, HabitDraft, InputType } from "./types";
+import type { AppState, Comparator, ExerciseDetails, Habit, HabitDraft, HabitDirection, InputType } from "./types";
 import { CloudSyncController, type CloudSyncSnapshot } from "./data/cloud-sync";
-import { ruleForDate } from "./domain/compliance";
+import { evaluateHabitDay, ruleForDate } from "./domain/compliance";
 import { addDays, dayName, todayKey } from "./domain/dates";
+import {
+  isDaySecured,
+  isRecoveryCompletion,
+  momentumSummary,
+  remainingRequiredToday,
+} from "./domain/momentum";
 import { TrackerStore } from "./state/store";
 import { escapeHtml, icon } from "./ui";
 import { renderCloudSync } from "./views/settings";
@@ -20,14 +26,19 @@ export class TrackerApp {
   ) {}
 
   start(): void {
-    this.store.subscribe(() => this.render());
+    this.store.subscribe(() => {
+      this.render();
+      void this.updateAppBadge();
+    });
     this.cloudSync.subscribe((snapshot) => this.updateCloudSync(snapshot));
     this.root.addEventListener("click", (event) => this.handleClick(event));
     this.root.addEventListener("change", (event) => this.handleChange(event));
     this.root.addEventListener("submit", (event) => this.handleSubmit(event));
     window.addEventListener("online", () => this.updateOnlineStatus());
     window.addEventListener("offline", () => this.updateOnlineStatus());
+    window.addEventListener("focus", () => void this.updateAppBadge());
     this.render();
+    void this.updateAppBadge();
   }
 
   private render(): void {
@@ -68,10 +79,38 @@ export class TrackerApp {
       case "selected-date-today":
         this.store.setSelectedDate(todayKey());
         break;
-      case "toggle-boolean":
+      case "set-boolean":
         if (button.dataset.habitId) {
-          this.store.setBooleanLog(button.dataset.habitId, this.store.snapshot.selectedDate, true);
-          this.toast("Habit updated");
+          const habitId = button.dataset.habitId;
+          const localDate = this.store.snapshot.selectedDate;
+          const habit = this.store.snapshot.habits.find((item) => item.id === habitId);
+          if (!habit) break;
+          const before = evaluateHabitDay({
+            habit,
+            rules: this.store.snapshot.rules,
+            logs: this.store.snapshot.logs,
+            exceptions: this.store.snapshot.exceptions,
+            localDate,
+          });
+          const beforeMomentum = momentumSummary(this.store.snapshot);
+          const wasDaySecured = isDaySecured(this.store.snapshot, localDate);
+          const value = button.dataset.value !== "false";
+          const recovery = value && !before.successful && isRecoveryCompletion(this.store.snapshot, habitId, localDate);
+          this.store.setBooleanLog(habitId, localDate, value);
+          const after = evaluateHabitDay({
+            habit,
+            rules: this.store.snapshot.rules,
+            logs: this.store.snapshot.logs,
+            exceptions: this.store.snapshot.exceptions,
+            localDate,
+          });
+          if (value && !before.successful && after.successful) {
+            this.celebrateCompletion(habit, recovery, wasDaySecured, beforeMomentum);
+          } else if (!value && after.status === "off-target") {
+            this.toast("Slip logged. The next choice is a fresh one.", "recovery");
+          } else {
+            this.toast("Entry cleared");
+          }
         }
         break;
       case "set-checkin":
@@ -153,6 +192,14 @@ export class TrackerApp {
       case "week-start":
         this.store.updateSettings({ weekStartsOn: button.dataset.value === "0" ? 0 : 1 });
         break;
+      case "enable-app-badge":
+        void this.enableAppBadge();
+        break;
+      case "disable-app-badge":
+        this.store.updateSettings({ appBadgeEnabled: false });
+        void this.clearAppBadge();
+        this.toast("Home Screen count disabled");
+        break;
       case "reset-data":
         if (window.confirm("Erase all Routine Command history and restore the example habits?")) {
           void this.store.reset().then(() => this.toast("Routine Command reset"));
@@ -172,9 +219,33 @@ export class TrackerApp {
     if (input.matches("[data-numeric-log]")) {
       const habitId = input.getAttribute("data-numeric-log");
       if (habitId) {
+        const localDate = this.store.snapshot.selectedDate;
+        const habit = this.store.snapshot.habits.find((item) => item.id === habitId);
         const value = input.value.trim() === "" ? null : Number(input.value);
-        this.store.setNumericLog(habitId, this.store.snapshot.selectedDate, value);
-        this.toast(value === null ? "Entry cleared" : "Value saved");
+        if (!habit) return;
+        const before = evaluateHabitDay({
+          habit,
+          rules: this.store.snapshot.rules,
+          logs: this.store.snapshot.logs,
+          exceptions: this.store.snapshot.exceptions,
+          localDate,
+        });
+        const beforeMomentum = momentumSummary(this.store.snapshot);
+        const wasDaySecured = isDaySecured(this.store.snapshot, localDate);
+        const recovery = value !== null && !before.successful && isRecoveryCompletion(this.store.snapshot, habitId, localDate);
+        this.store.setNumericLog(habitId, localDate, value);
+        const after = evaluateHabitDay({
+          habit,
+          rules: this.store.snapshot.rules,
+          logs: this.store.snapshot.logs,
+          exceptions: this.store.snapshot.exceptions,
+          localDate,
+        });
+        if (!before.successful && after.successful) {
+          this.celebrateCompletion(habit, recovery, wasDaySecured, beforeMomentum);
+        } else {
+          this.toast(value === null ? "Entry cleared" : after.status === "off-target" ? "Saved — target not met yet" : "Value saved");
+        }
       }
       return;
     }
@@ -200,6 +271,13 @@ export class TrackerApp {
       const setting = input.getAttribute("data-setting");
       if (setting === "showEnergy") {
         this.store.updateSettings({ [setting]: (input as HTMLInputElement).checked });
+      } else if (setting === "personalReward") {
+        this.store.updateSettings({ personalReward: input.value.trim().slice(0, 80) });
+      } else if (setting === "rewardTarget") {
+        const rewardTarget = Number(input.value);
+        if ([0.7, 0.8, 0.9, 1].includes(rewardTarget)) {
+          this.store.updateSettings({ rewardTarget });
+        }
       }
       return;
     }
@@ -281,6 +359,7 @@ export class TrackerApp {
       icon: String(data.get("icon") ?? "target"),
       color: String(data.get("color") ?? HABIT_COLORS[0]),
       optional: data.get("optional") === "on",
+      direction: data.get("direction") === "avoid" ? "avoid" : "build",
       weekdays,
       comparator,
       targetMin: minimum,
@@ -307,6 +386,7 @@ export class TrackerApp {
     const habit = habitId ? state.habits.find((item) => item.id === habitId) : undefined;
     const rule = habit ? ruleForDate(state.rules, habit.id, todayKey()) : null;
     const inputType = rule?.inputType ?? habit?.inputType ?? "boolean";
+    const direction: HabitDirection = rule?.direction ?? habit?.direction ?? "build";
     const unit = rule?.unit ?? habit?.unit ?? "";
     const weekdays = rule?.weekdays ?? [0, 1, 2, 3, 4, 5, 6];
     const root = this.root.querySelector<HTMLElement>("#modalRoot");
@@ -317,6 +397,7 @@ export class TrackerApp {
         <header><div><p class="eyebrow">${habit ? "Edit habit" : "New habit"}</p><h2 id="habitModalTitle">${habit ? escapeHtml(habit.name) : "Build a repeatable cue"}</h2></div><button class="icon-button" data-action="close-modal" aria-label="Close">${icon("close", 20)}</button></header>
         <form id="habitForm">
           <label class="field"><span>Name</span><input name="name" value="${escapeHtml(habit?.name ?? "")}" placeholder="e.g. Read" maxlength="50" autofocus required /></label>
+          <fieldset class="form-group"><legend>What kind of goal is it?</legend><div class="choice-cards direction-choices"><label><input type="radio" name="direction" value="build" ${direction === "build" ? "checked" : ""}/><span>${icon("plus", 20)}<strong>Build</strong><small>Do something helpful</small></span></label><label><input type="radio" name="direction" value="avoid" ${direction === "avoid" ? "checked" : ""}/><span>${icon("target", 20)}<strong>Avoid</strong><small>Stay clear of something</small></span></label></div></fieldset>
           <fieldset class="form-group"><legend>How will you record it?</legend><div class="choice-cards"><label><input type="radio" name="inputType" value="boolean" ${inputType === "boolean" ? "checked" : ""}/><span>${icon("check", 20)}<strong>Yes / no</strong><small>One tap to complete</small></span></label><label><input type="radio" name="inputType" value="number" ${inputType === "number" ? "checked" : ""}/><span><b>#</b><strong>Number</strong><small>Minutes, calories, count</small></span></label></div></fieldset>
           <div class="numeric-fields" ${inputType === "boolean" ? "hidden" : ""}>
             <label class="field"><span>Unit</span><input name="unit" value="${escapeHtml(unit)}" placeholder="min, kcal, steps" maxlength="16" /></label>
@@ -368,10 +449,10 @@ export class TrackerApp {
     }
   }
 
-  private toast(message: string): void {
+  private toast(message: string, tone: "default" | "recovery" = "default"): void {
     const root = this.root.querySelector<HTMLElement>("#toastRoot");
     if (!root) return;
-    root.innerHTML = `<div class="toast">${icon("check", 17)} ${escapeHtml(message)}</div>`;
+    root.innerHTML = `<div class="toast ${tone === "recovery" ? "recovery" : ""}">${icon(tone === "recovery" ? "sparkles" : "check", 17)} ${escapeHtml(message)}</div>`;
     window.setTimeout(() => {
       if (root.isConnected) root.innerHTML = "";
     }, 2400);
@@ -387,6 +468,111 @@ export class TrackerApp {
     if (sidebarStatus) sidebarStatus.innerHTML = renderSyncStatus(snapshot);
     const syncCard = this.root.querySelector<HTMLElement>("[data-cloud-sync-card]");
     if (syncCard) syncCard.outerHTML = renderCloudSync(snapshot);
+  }
+
+  private celebrateCompletion(
+    habit: Habit,
+    recovery: boolean,
+    wasDaySecured: boolean,
+    beforeMomentum: ReturnType<typeof momentumSummary>,
+  ): void {
+    const card = this.root.querySelector<HTMLElement>(
+      `[data-habit-card-id="${CSS.escape(habit.id)}"]`,
+    );
+    card?.classList.add("just-completed");
+    this.root.querySelector<HTMLElement>(".daily-progress")?.classList.add("energy-gained");
+
+    const afterMomentum = momentumSummary(this.store.snapshot);
+    const dayJustSecured = !wasDaySecured && isDaySecured(
+      this.store.snapshot,
+      this.store.snapshot.selectedDate,
+    );
+    const rewardJustUnlocked = !beforeMomentum.rewardUnlocked && afterMomentum.rewardUnlocked;
+    const rankAdvanced = afterMomentum.rankLevel > beforeMomentum.rankLevel;
+    const rare = isRareMoment(`${habit.id}:${this.store.snapshot.selectedDate}:${this.store.snapshot.logs.length}`);
+
+    if (dayJustSecured) {
+      const reward = rewardJustUnlocked ? ` Reward unlocked: ${this.store.snapshot.settings.personalReward}.` : "";
+      this.showCelebration(
+        rare ? "Perfect alignment" : "Day secured",
+        `${recovery ? "Recovery win. " : ""}Every required objective is complete.${reward}`,
+        rare,
+      );
+    } else if (rewardJustUnlocked) {
+      this.showCelebration(
+        "Reward unlocked",
+        this.store.snapshot.settings.personalReward,
+        true,
+      );
+    } else if (rankAdvanced) {
+      this.showCelebration("Rank advanced", afterMomentum.rank, false);
+    } else if (recovery) {
+      this.toast("Back on course — recovery win.", "recovery");
+    } else if (rare) {
+      this.showCelebration("Momentum surge", "A small win just became part of the system.", true);
+    } else {
+      this.toast(habit.direction === "avoid" ? "Stayed clear. Momentum protected." : "Objective complete");
+    }
+  }
+
+  private showCelebration(title: string, message: string, rare: boolean): void {
+    const root = this.root.querySelector<HTMLElement>("#celebrationRoot");
+    if (!root) return;
+    root.innerHTML = `
+      <div class="celebration ${rare ? "rare" : ""}" role="status">
+        <span class="celebration-mark">${icon(rare ? "sparkles" : "check", 30)}</span>
+        <p class="eyebrow">Routine Command</p>
+        <strong>${escapeHtml(title)}</strong>
+        <span>${escapeHtml(message)}</span>
+        <i class="spark spark-one"></i><i class="spark spark-two"></i><i class="spark spark-three"></i><i class="spark spark-four"></i>
+      </div>`;
+    window.setTimeout(() => {
+      if (root.isConnected) root.innerHTML = "";
+    }, 2800);
+  }
+
+  private async enableAppBadge(): Promise<void> {
+    const badgeNavigator = navigator as Navigator & {
+      setAppBadge?: (contents?: number) => Promise<void>;
+    };
+    if (!badgeNavigator.setAppBadge) {
+      this.toast("Install Routine Command on your Home Screen to use the count badge");
+      return;
+    }
+    if ("Notification" in window && Notification.permission !== "granted") {
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        this.toast("Notification permission is required by iPhone for icon badges");
+        return;
+      }
+    }
+    this.store.updateSettings({ appBadgeEnabled: true });
+    await this.updateAppBadge();
+    this.toast("Home Screen count enabled");
+  }
+
+  private async updateAppBadge(): Promise<void> {
+    if (!this.store.snapshot.settings.appBadgeEnabled) return;
+    const badgeNavigator = navigator as Navigator & {
+      setAppBadge?: (contents?: number) => Promise<void>;
+      clearAppBadge?: () => Promise<void>;
+    };
+    try {
+      const remaining = remainingRequiredToday(this.store.snapshot);
+      if (remaining > 0) await badgeNavigator.setAppBadge?.(remaining);
+      else await badgeNavigator.clearAppBadge?.();
+    } catch (error) {
+      console.warn("Could not update the Routine Command app badge.", error);
+    }
+  }
+
+  private async clearAppBadge(): Promise<void> {
+    const badgeNavigator = navigator as Navigator & { clearAppBadge?: () => Promise<void> };
+    try {
+      await badgeNavigator.clearAppBadge?.();
+    } catch (error) {
+      console.warn("Could not clear the Routine Command app badge.", error);
+    }
   }
 }
 
@@ -407,4 +593,12 @@ function toLocalKey(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function isRareMoment(seed: string): boolean {
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
+  }
+  return hash % 9 === 0;
 }

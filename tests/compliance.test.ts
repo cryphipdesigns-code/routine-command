@@ -16,6 +16,7 @@ const booleanHabit: Habit = {
   icon: "activity",
   color: "#000000",
   optional: false,
+  direction: "build",
   sortOrder: 0,
   createdAt: "2026-01-01T00:00:00.000Z",
   archivedAt: null,
@@ -37,6 +38,7 @@ function rule(overrides: Partial<HabitRule> = {}): HabitRule {
     effectiveTo: null,
     inputType: "boolean",
     unit: "",
+    direction: "build",
     weekdays: [1, 2, 3, 4, 5],
     comparator: "checked",
     targetMin: null,
@@ -89,6 +91,48 @@ describe("daily evaluation", () => {
     });
     expect(result.status).toBe("success");
     expect(result.successful).toBe(true);
+  });
+
+  it("treats an avoid confirmation as success and a logged slip as off-target", () => {
+    const avoidHabit: Habit = { ...booleanHabit, direction: "avoid", name: "No nicotine" };
+    const avoidRule = rule({ direction: "avoid" });
+    const stayedClear = evaluateHabitDay({
+      habit: avoidHabit,
+      rules: [avoidRule],
+      logs: [log({ booleanValue: true })],
+      localDate: "2026-10-02",
+      today: "2026-10-02",
+    });
+    const slip = evaluateHabitDay({
+      habit: avoidHabit,
+      rules: [avoidRule],
+      logs: [log({ booleanValue: false })],
+      localDate: "2026-10-02",
+      today: "2026-10-02",
+    });
+    expect(stayedClear.status).toBe("success");
+    expect(slip.status).toBe("off-target");
+  });
+
+  it("keeps auxiliary-only boolean logs pending", () => {
+    const result = evaluateHabitDay({
+      habit: booleanHabit,
+      rules: [rule()],
+      logs: [
+        log({
+          booleanValue: null,
+          exerciseDetails: {
+            activityType: "Strength",
+            durationMinutes: 30,
+            caloriesBurned: null,
+            timeOfDay: null,
+          },
+        }),
+      ],
+      localDate: "2026-10-02",
+      today: "2026-10-02",
+    });
+    expect(result.status).toBe("pending");
   });
 });
 

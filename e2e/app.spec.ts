@@ -5,6 +5,7 @@ test("logs a habit immediately and preserves it after reload", async ({ page }) 
   await expect(page.getByRole("heading", { name: "Scheduled today" })).toBeVisible();
   await page.getByRole("button", { name: "Complete Sunlight" }).click();
   await expect(page.locator(".progress-ring strong")).toHaveText("1");
+  await expect(page.locator('[data-habit-card-id="habit-sunlight"]')).toHaveClass(/just-completed/);
 
   await page.reload();
   await expect(page.locator(".progress-ring strong")).toHaveText("1");
@@ -24,6 +25,53 @@ test("adds and edits a scheduled habit", async ({ page }) => {
   await page.getByLabel("Name").fill("Meditate quietly");
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.locator(".habit-manager-card", { hasText: "Meditate quietly" })).toBeVisible();
+});
+
+test("tracks an avoid habit without rewarding a logged slip", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('[data-view="habits"]:visible').first().click();
+  await page.getByRole("button", { name: "Add habit" }).click();
+  await page.getByLabel("Name").fill("No alcohol");
+  await page.getByRole("radio", { name: /Avoid/ }).check();
+  await page.locator("#habitForm").getByRole("button", { name: "Add habit", exact: true }).click();
+
+  await page.locator('[data-view="today"]:visible').first().click();
+  const avoidCard = page.locator(".habit-check", { hasText: "No alcohol" });
+  await expect(avoidCard.locator(".direction-badge")).toHaveText("Avoid");
+  await avoidCard.getByRole("button", { name: "Stayed clear: No alcohol" }).click();
+  await expect(avoidCard).toContainText("Stayed clear");
+  await expect(avoidCard).toHaveClass(/just-completed/);
+
+  await avoidCard.getByRole("button", { name: "Log slip: No alcohol" }).click();
+  await expect(avoidCard).toContainText("Slip logged");
+  await expect(avoidCard.getByRole("button", { name: "Undo slip: No alcohol" })).toHaveAttribute("aria-pressed", "true");
+});
+
+test("celebrates when every required objective is secured", async ({ page }) => {
+  await page.goto("/");
+  let openButtons = page.locator('.habit-check .completion-button[aria-pressed="false"]');
+  while ((await openButtons.count()) > 0) {
+    await openButtons.first().evaluate((button: HTMLButtonElement) => button.click());
+    openButtons = page.locator('.habit-check .completion-button[aria-pressed="false"]');
+  }
+  const calories = page.locator('[data-numeric-log="habit-calories"]');
+  await calories.fill("2000");
+  await calories.dispatchEvent("change");
+  await expect(page.locator(".celebration")).toContainText(/Day secured|Perfect alignment/);
+  const total = ((await page.locator(".progress-ring span").textContent()) ?? "").replace("of ", "");
+  await expect(page.locator(".progress-ring strong")).toHaveText(total);
+});
+
+test("stores a personal reward and exposes the free Home Screen badge control", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('[data-view="settings"]:visible').first().click();
+  await page.getByLabel("Personal reward").fill("Movie night");
+  await page.getByLabel("Personal reward").blur();
+  await page.getByLabel("Unlock target").selectOption("0.9");
+  await expect(page.getByRole("button", { name: "Enable" })).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel("Personal reward")).toHaveValue("Movie night");
+  await expect(page.getByLabel("Unlock target")).toHaveValue("0.9");
 });
 
 test("renders review periods and opens a day", async ({ page }) => {

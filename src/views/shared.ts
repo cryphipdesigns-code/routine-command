@@ -48,7 +48,8 @@ export function scheduleLabel(weekdays: number[]): string {
 export function habitMeta(state: AppState, habit: Habit): string {
   const rule = ruleForDate(state.rules, habit.id, todayKey());
   if (!rule) return "No active schedule";
-  return `${targetLabel(habit, rule)} · ${scheduleLabel(rule.weekdays)}`;
+  const direction = rule.direction === "avoid" ? "Avoid" : "Build";
+  return `${direction} · ${targetLabel(habit, rule)} · ${scheduleLabel(rule.weekdays)}`;
 }
 
 export function statusText(status: string): string {

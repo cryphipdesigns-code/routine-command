@@ -22,7 +22,7 @@ export function renderHabits(state: AppState): string {
                   .map(
                     (habit) => `<article class="habit-manager-card" style="--habit-color:${habit.color}">
                       <div class="habit-symbol">${icon(habit.icon, 21)}</div>
-                      <div><div class="habit-name-line"><h3>${escapeHtml(habit.name)}</h3>${habit.optional ? '<span class="optional-badge">Optional</span>' : ""}</div><p>${escapeHtml(habitMeta(state, habit))}</p></div>
+                      <div><div class="habit-name-line"><h3>${escapeHtml(habit.name)}</h3>${habit.direction === "avoid" ? '<span class="direction-badge">Avoid</span>' : ""}${habit.optional ? '<span class="optional-badge">Optional</span>' : ""}</div><p>${escapeHtml(habitMeta(state, habit))}</p></div>
                       <div class="habit-actions">
                         <button class="icon-button" data-action="edit-habit" data-habit-id="${habit.id}" aria-label="Edit ${escapeHtml(habit.name)}">${icon("edit", 18)}</button>
                         <button class="icon-button" data-action="archive-habit" data-habit-id="${habit.id}" aria-label="Archive ${escapeHtml(habit.name)}">${icon("archive", 18)}</button>

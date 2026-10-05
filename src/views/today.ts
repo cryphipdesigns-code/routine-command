@@ -1,7 +1,8 @@
 import type { AppState, ExerciseDetails, Habit } from "../types";
 import { evaluateHabitDay, ruleForDate, targetLabel } from "../domain/compliance";
-import { formatDayHeading, isFuture, isToday } from "../domain/dates";
-import { escapeHtml, icon } from "../ui";
+import { formatDayHeading, isFuture, isToday, parseDateKey } from "../domain/dates";
+import { momentumSummary } from "../domain/momentum";
+import { escapeHtml, formatPercent, icon } from "../ui";
 import { activeHabits, emptyState, pageIntro, statusText } from "./shared";
 
 export function renderToday(state: AppState): string {
@@ -48,7 +49,7 @@ export function renderToday(state: AppState): string {
         </div>
         <div>
           <p class="eyebrow">Daily progress</p>
-          <h2>${progress === 1 && required.length ? "Day complete" : required.length ? `${required.length - complete} left for this day` : "No required habits today"}</h2>
+          <h2>${progress === 1 && required.length ? "Day secured" : required.length ? `${required.length - complete} left for this day` : "No required habits today"}</h2>
           <p>${scheduled.length ? "Optional habits never lower your adherence." : "No habits are scheduled for this day."}</p>
         </div>
       </section>
@@ -66,6 +67,8 @@ export function renderToday(state: AppState): string {
           }
         </div>
       </section>
+
+      ${isToday(state.selectedDate) ? renderMomentum(state) : ""}
 
       ${renderCheckin(state)}
 
@@ -98,25 +101,49 @@ function renderHabitCheck(state: AppState, habit: Habit, status: string): string
   const numericValue = evaluation.log?.numericValue;
   const exerciseDetails = evaluation.log?.exerciseDetails ?? null;
   const supportsExerciseDetails = habit.id === "habit-exercise";
+  const isAvoid = rule.direction === "avoid";
+  const isSlip = evaluation.log?.booleanValue === false;
 
   return `
-    <article class="habit-check habit-status-${status}" style="--habit-color: ${habit.color}">
+    <article class="habit-check habit-status-${status}" data-habit-card-id="${habit.id}" style="--habit-color: ${habit.color}">
       <div class="habit-symbol">${icon(habit.icon, 21)}</div>
       <div class="habit-check-copy">
-        <div class="habit-name-line"><h3>${escapeHtml(habit.name)}</h3>${habit.optional ? '<span class="optional-badge">Optional</span>' : ""}</div>
+        <div class="habit-name-line"><h3>${escapeHtml(habit.name)}</h3>${isAvoid ? '<span class="direction-badge">Avoid</span>' : ""}${habit.optional ? '<span class="optional-badge">Optional</span>' : ""}</div>
         <p>${escapeHtml(targetLabel(habit, rule))}</p>
-        <span class="habit-state-label">${escapeHtml(statusText(status))}</span>
+        <span class="habit-state-label">${escapeHtml(habitStatusText(isAvoid, status))}</span>
       </div>
       ${
         rule.inputType === "boolean"
-          ? `<button
-              class="completion-button ${isComplete ? "is-complete" : ""}"
-              data-action="toggle-boolean"
-              data-habit-id="${habit.id}"
-              aria-label="${isComplete ? "Undo" : "Complete"} ${escapeHtml(habit.name)}"
-              aria-pressed="${isComplete}"
-              ${disabled ? "disabled" : ""}
-            >${icon("check", 24)}</button>`
+          ? isAvoid
+            ? `<div class="avoid-actions" role="group" aria-label="${escapeHtml(habit.name)} result">
+                <button
+                  class="completion-button avoid-success ${isComplete ? "is-complete" : ""}"
+                  data-action="set-boolean"
+                  data-value="true"
+                  data-habit-id="${habit.id}"
+                  aria-label="${isComplete ? "Undo stayed clear" : "Stayed clear"}: ${escapeHtml(habit.name)}"
+                  aria-pressed="${isComplete}"
+                  ${disabled ? "disabled" : ""}
+                >${icon("check", 22)}</button>
+                <button
+                  class="slip-button ${isSlip ? "is-slip" : ""}"
+                  data-action="set-boolean"
+                  data-value="false"
+                  data-habit-id="${habit.id}"
+                  aria-label="${isSlip ? "Undo slip" : "Log slip"}: ${escapeHtml(habit.name)}"
+                  aria-pressed="${isSlip}"
+                  ${disabled ? "disabled" : ""}
+                >${icon("close", 15)}</button>
+              </div>`
+            : `<button
+                class="completion-button ${isComplete ? "is-complete" : ""}"
+                data-action="set-boolean"
+                data-value="true"
+                data-habit-id="${habit.id}"
+                aria-label="${isComplete ? "Undo" : "Complete"} ${escapeHtml(habit.name)}"
+                aria-pressed="${isComplete}"
+                ${disabled ? "disabled" : ""}
+              >${icon("check", 24)}</button>`
           : `<label class="number-entry">
               <span class="sr-only">${escapeHtml(habit.name)} value</span>
               <input
@@ -135,6 +162,49 @@ function renderHabitCheck(state: AppState, habit: Habit, status: string): string
       ${supportsExerciseDetails ? renderExerciseDetails(habit, exerciseDetails, disabled) : ""}
     </article>
   `;
+}
+
+function renderMomentum(state: AppState): string {
+  const momentum = momentumSummary(state);
+  const reward = state.settings.personalReward.trim();
+  return `
+    <section class="momentum-card surface">
+      <div class="momentum-copy">
+        <p class="eyebrow">Seven-day momentum</p>
+        <div class="rank-line"><h2>${escapeHtml(momentum.rank)}</h2><span>Command rank</span></div>
+        <p>${momentum.adherence === null ? "Complete a few check-ins to establish your rhythm." : `${formatPercent(momentum.adherence)} adherence · ${momentum.securedDays} secured ${momentum.securedDays === 1 ? "day" : "days"}`}</p>
+      </div>
+      <div class="momentum-trail" aria-label="Seven-day momentum">
+        ${momentum.days
+          .map((day) => {
+            const label = new Intl.DateTimeFormat(undefined, { weekday: "narrow" }).format(parseDateKey(day.localDate));
+            return `<span class="momentum-day ${day.tone}" title="${day.tone}"><i>${day.tone === "secured" ? icon("check", 14) : ""}</i><small>${label}</small></span>`;
+          })
+          .join("")}
+      </div>
+      ${
+        reward
+          ? `<div class="reward-vault ${momentum.rewardUnlocked ? "unlocked" : ""}">
+              <span>${icon(momentum.rewardUnlocked ? "sparkles" : "target", 18)}</span>
+              <div><strong>${momentum.rewardUnlocked ? "Reward unlocked" : "Reward vault"}</strong><small>${escapeHtml(reward)} · ${Math.round(state.settings.rewardTarget * 100)}% target</small></div>
+            </div>`
+          : ""
+      }
+    </section>
+  `;
+}
+
+function habitStatusText(isAvoid: boolean, status: string): string {
+  if (!isAvoid) return statusText(status);
+  const values: Record<string, string> = {
+    success: "Stayed clear",
+    "off-target": "Slip logged",
+    missed: "Not confirmed",
+    pending: "Still open",
+    upcoming: "Upcoming",
+    "not-scheduled": "Not scheduled",
+  };
+  return values[status] ?? status;
 }
 
 function renderExerciseDetails(
