@@ -14,6 +14,11 @@ export function renderSettings(state: AppState, sync: CloudSyncSnapshot): string
       <section class="settings-grid">
         ${renderCloudSync(sync)}
         <div class="section-block settings-card">
+          <div class="section-heading"><div><p class="eyebrow">App</p><h2>Refresh Routine Command</h2></div></div>
+          <p class="settings-note">On the Home Screen app, pull down from the top of any page. You can also refresh manually here.</p>
+          <button class="secondary-button wide" data-action="refresh-app">${icon("refreshCw", 18)} Refresh app</button>
+        </div>
+        <div class="section-block settings-card">
           <div class="section-heading"><div><p class="eyebrow">Calendar</p><h2>Week and time</h2></div></div>
           <div class="setting-row"><div><strong>Week starts on</strong><span>Used by weekly review</span></div><div class="segmented-control small"><button data-action="week-start" data-value="1" class="${state.settings.weekStartsOn === 1 ? "active" : ""}">Monday</button><button data-action="week-start" data-value="0" class="${state.settings.weekStartsOn === 0 ? "active" : ""}">Sunday</button></div></div>
           <div class="setting-row"><div><strong>Local timezone</strong><span>Daily boundaries follow this device</span></div><span class="setting-value">${escapeHtml(state.settings.timezone)}</span></div>

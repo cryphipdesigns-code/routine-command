@@ -78,6 +78,9 @@ const HABIT_ICON_NAMES: Record<string, string> = {
 
 export class TrackerApp {
   private modalHabitId: string | null = null;
+  private pullStartY: number | null = null;
+  private pullDistance = 0;
+  private isRefreshing = false;
 
   constructor(
     private readonly root: HTMLElement,
@@ -97,6 +100,10 @@ export class TrackerApp {
     window.addEventListener("online", () => this.updateOnlineStatus());
     window.addEventListener("offline", () => this.updateOnlineStatus());
     window.addEventListener("focus", () => void this.updateAppBadge());
+    window.addEventListener("touchstart", (event) => this.handlePullStart(event), { passive: true });
+    window.addEventListener("touchmove", (event) => this.handlePullMove(event), { passive: true });
+    window.addEventListener("touchend", () => this.handlePullEnd(), { passive: true });
+    window.addEventListener("touchcancel", () => this.cancelPullRefresh(), { passive: true });
     this.render();
     void this.updateAppBadge();
   }
@@ -271,6 +278,83 @@ export class TrackerApp {
       case "sync-now":
         void this.cloudSync.syncNow().then(() => this.toast("Sync checked"));
         break;
+      case "refresh-app":
+        void this.refreshApp();
+        break;
+    }
+  }
+
+  private handlePullStart(event: TouchEvent): void {
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (
+      this.isRefreshing ||
+      window.scrollY > 0 ||
+      event.touches.length !== 1 ||
+      target?.closest(".modal-card, input, textarea, select")
+    ) {
+      this.pullStartY = null;
+      return;
+    }
+    this.pullStartY = event.touches[0]?.clientY ?? null;
+    this.pullDistance = 0;
+  }
+
+  private handlePullMove(event: TouchEvent): void {
+    if (this.pullStartY === null || event.touches.length !== 1) return;
+    const delta = (event.touches[0]?.clientY ?? this.pullStartY) - this.pullStartY;
+    if (delta <= 0) {
+      this.updatePullIndicator(0);
+      return;
+    }
+    this.pullDistance = Math.min(92, delta * 0.48);
+    this.updatePullIndicator(this.pullDistance);
+  }
+
+  private handlePullEnd(): void {
+    if (this.pullStartY === null) return;
+    const shouldRefresh = this.pullDistance >= 64;
+    this.pullStartY = null;
+    if (shouldRefresh) {
+      void this.refreshApp();
+    } else {
+      this.pullDistance = 0;
+      this.updatePullIndicator(0);
+    }
+  }
+
+  private cancelPullRefresh(): void {
+    this.pullStartY = null;
+    this.pullDistance = 0;
+    this.updatePullIndicator(0);
+  }
+
+  private updatePullIndicator(distance: number, refreshing = false): void {
+    const indicator = this.root.querySelector<HTMLElement>("#pullRefresh");
+    if (!indicator) return;
+    const ready = distance >= 64;
+    indicator.style.setProperty("--pull-distance", `${distance}px`);
+    indicator.classList.toggle("is-pulling", distance > 0 || refreshing);
+    indicator.classList.toggle("is-ready", ready && !refreshing);
+    indicator.classList.toggle("is-refreshing", refreshing);
+    indicator.setAttribute("aria-hidden", distance > 0 || refreshing ? "false" : "true");
+    const label = indicator.querySelector("strong");
+    if (label) label.textContent = refreshing ? "Refreshing…" : ready ? "Release to refresh" : "Pull to refresh";
+  }
+
+  private async refreshApp(): Promise<void> {
+    if (this.isRefreshing) return;
+    this.isRefreshing = true;
+    this.pullDistance = 70;
+    this.updatePullIndicator(this.pullDistance, true);
+    try {
+      if ("serviceWorker" in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((registration) => registration.update()));
+      }
+    } catch (error) {
+      console.warn("Could not check for an app update before refreshing.", error);
+    } finally {
+      window.setTimeout(() => window.location.reload(), 300);
     }
   }
 

@@ -118,6 +118,61 @@ test("renders review periods and opens a day", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /Today|Friday|Saturday|Sunday|Monday|Tuesday|Wednesday|Thursday/ })).toBeVisible();
 });
 
+test("contains the weekly review grid inside the mobile viewport", async ({ page }, testInfo) => {
+  test.skip(!testInfo.project.name.startsWith("mobile"), "Mobile layout check");
+  await page.goto("/");
+  await page.locator('[data-view="review"]:visible').first().click();
+  const layout = await page.evaluate(() => {
+    const scroller = document.querySelector<HTMLElement>(".weekly-grid-scroller")!;
+    const label = document.querySelector<HTMLElement>(".week-habit-label")!;
+    scroller.scrollLeft = 110;
+    return {
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth,
+      scrollerWidth: scroller.clientWidth,
+      tableWidth: scroller.scrollWidth,
+      scrollerLeft: scroller.getBoundingClientRect().left,
+      labelLeft: label.getBoundingClientRect().left,
+    };
+  });
+  expect(layout.documentWidth).toBeLessThanOrEqual(layout.viewportWidth);
+  expect(layout.scrollerWidth).toBeLessThan(layout.tableWidth);
+  expect(Math.abs(layout.scrollerLeft - layout.labelLeft)).toBeLessThanOrEqual(1);
+});
+
+test("refreshes the installed app with a pull-down gesture", async ({ page }, testInfo) => {
+  test.skip(!testInfo.project.name.startsWith("mobile"), "Touch gesture check");
+  await page.goto("/");
+  await page.evaluate(() => {
+    const target = document.body;
+    const touch = (clientY: number) =>
+      new Touch({ identifier: 1, target, clientX: 190, clientY, pageX: 190, pageY: clientY });
+    target.dispatchEvent(
+      new TouchEvent("touchstart", { bubbles: true, touches: [touch(70)], changedTouches: [touch(70)] }),
+    );
+    target.dispatchEvent(
+      new TouchEvent("touchmove", { bubbles: true, touches: [touch(230)], changedTouches: [touch(230)] }),
+    );
+  });
+  await expect(page.locator("#pullRefresh")).toHaveClass(/is-ready/);
+  await expect(page.locator("#pullRefresh strong")).toHaveText("Release to refresh");
+  await page.evaluate(() => sessionStorage.setItem("pull-refresh-test", "retained"));
+  const loaded = page.waitForEvent("load");
+  await page.evaluate(() => document.body.dispatchEvent(new TouchEvent("touchend", { bubbles: true })));
+  await loaded;
+  await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => sessionStorage.getItem("pull-refresh-test"))).toBe("retained");
+});
+
+test("offers a manual refresh inside the installed app", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('[data-view="settings"]:visible').first().click();
+  const loaded = page.waitForEvent("load");
+  await page.getByRole("button", { name: "Refresh app" }).click();
+  await loaded;
+  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+});
+
 test("keeps 15 min Read as yes/no and retains sleep times", async ({ page }) => {
   await page.goto("/");
   await page.locator('[data-view="habits"]:visible').first().click();
