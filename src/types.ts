@@ -4,6 +4,13 @@ export type InputType = "boolean" | "number";
 export type Comparator = "checked" | "gte" | "lte" | "between" | "exact";
 export type LogSource = "manual" | "apple-health" | "health-connect" | "import";
 
+export interface ExerciseDetails {
+  activityType: string;
+  durationMinutes: number | null;
+  caloriesBurned: number | null;
+  timeOfDay: string | null;
+}
+
 export interface Habit {
   id: string;
   name: string;
@@ -38,6 +45,7 @@ export interface HabitLog {
   numericValue: number | null;
   source: LogSource;
   note: string;
+  exerciseDetails?: ExerciseDetails | null;
   updatedAt: string;
 }
 
@@ -68,7 +76,7 @@ export interface UserSettings {
 }
 
 export interface AppState {
-  schemaVersion: 3;
+  schemaVersion: 4;
   activeView: ViewId;
   selectedDate: string;
   reviewAnchor: string;

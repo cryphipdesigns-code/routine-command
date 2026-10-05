@@ -1,4 +1,4 @@
-import type { AppState, Habit } from "../types";
+import type { AppState, ExerciseDetails, Habit } from "../types";
 import { evaluateHabitDay, ruleForDate, targetLabel } from "../domain/compliance";
 import { formatDayHeading, isFuture, isToday } from "../domain/dates";
 import { escapeHtml, icon } from "../ui";
@@ -96,6 +96,8 @@ function renderHabitCheck(state: AppState, habit: Habit, status: string): string
   const disabled = isFuture(state.selectedDate);
   const isComplete = status === "success";
   const numericValue = evaluation.log?.numericValue;
+  const exerciseDetails = evaluation.log?.exerciseDetails ?? null;
+  const supportsExerciseDetails = habit.id === "habit-exercise";
 
   return `
     <article class="habit-check habit-status-${status}" style="--habit-color: ${habit.color}">
@@ -130,7 +132,47 @@ function renderHabitCheck(state: AppState, habit: Habit, status: string): string
               <span>${escapeHtml(rule.unit)}</span>
             </label>`
       }
+      ${supportsExerciseDetails ? renderExerciseDetails(habit, exerciseDetails, disabled) : ""}
     </article>
+  `;
+}
+
+function renderExerciseDetails(
+  habit: Habit,
+  details: ExerciseDetails | null,
+  disabled: boolean,
+): string {
+  const types = ["", "Strength", "Run", "Walk", "Cycle", "HIIT", "Sports", "Mobility", "Other"];
+  const summary = [
+    details?.activityType,
+    details?.durationMinutes !== null && details?.durationMinutes !== undefined
+      ? `${details.durationMinutes} min`
+      : "",
+    details?.caloriesBurned !== null && details?.caloriesBurned !== undefined
+      ? `${details.caloriesBurned} kcal`
+      : "",
+    details?.timeOfDay,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const field = (name: keyof ExerciseDetails) =>
+    `data-exercise-detail="${name}" data-habit-id="${habit.id}" ${disabled ? "disabled" : ""}`;
+
+  return `
+    <details class="exercise-details" data-exercise-details="${habit.id}">
+      <summary>
+        <span>${icon("activity", 17)} <strong>Workout details</strong></span>
+        <span>${summary ? escapeHtml(summary) : "Optional"}</span>
+      </summary>
+      <div class="exercise-detail-grid">
+        <label class="field"><span>Type</span><select ${field("activityType")}>
+          ${types.map((type) => `<option value="${type}" ${details?.activityType === type ? "selected" : ""}>${type || "Choose type"}</option>`).join("")}
+        </select></label>
+        <label class="field"><span>Duration</span><span class="exercise-number"><input type="number" inputmode="numeric" min="0" step="1" value="${details?.durationMinutes ?? ""}" placeholder="0" ${field("durationMinutes")} /><small>min</small></span></label>
+        <label class="field"><span>Calories burned</span><span class="exercise-number"><input type="number" inputmode="numeric" min="0" step="1" value="${details?.caloriesBurned ?? ""}" placeholder="0" ${field("caloriesBurned")} /><small>kcal</small></span></label>
+        <label class="field"><span>Time of day</span><input type="time" value="${escapeHtml(details?.timeOfDay ?? "")}" ${field("timeOfDay")} /></label>
+      </div>
+    </details>
   `;
 }
 

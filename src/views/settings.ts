@@ -50,7 +50,7 @@ export function renderSettings(state: AppState, sync: CloudSyncSnapshot): string
   `;
 }
 
-function renderCloudSync(sync: CloudSyncSnapshot): string {
+export function renderCloudSync(sync: CloudSyncSnapshot): string {
   const isSignedIn = sync.phase === "synced" || sync.phase === "syncing" || (sync.phase === "error" && Boolean(sync.email));
   const pillLabel = sync.phase === "synced" ? "Synced" : sync.phase === "syncing" ? "Syncing" : sync.phase === "error" ? "Needs attention" : "Local only";
   const pillClass = sync.phase === "synced" ? " synced" : sync.phase === "error" ? " error" : "";
@@ -60,7 +60,7 @@ function renderCloudSync(sync: CloudSyncSnapshot): string {
       ? `<p class="settings-note">Cloud sync will activate in the deployed build.</p>`
       : `<form id="syncForm" class="sync-form"><label class="field"><span>Email</span><input type="email" name="email" value="${escapeHtml(sync.email ?? "")}" autocomplete="email" placeholder="you@example.com" required /></label><button class="primary-button" type="submit">Email me a sign-in link</button></form><div class="auth-divider"><span>Already have a code?</span></div><form id="syncCodeForm" class="sync-form sync-code-form"><label class="field"><span>Email</span><input type="email" name="email" value="${escapeHtml(sync.email ?? "")}" autocomplete="email" placeholder="you@example.com" required /></label><label class="field"><span>Code</span><input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,8}" minlength="6" maxlength="8" placeholder="12345678" required /></label><button class="secondary-button" type="submit">Verify code</button></form>`;
   return `
-    <div class="section-block settings-card sync-card">
+    <div class="section-block settings-card sync-card" data-cloud-sync-card>
       <div class="section-heading"><div><p class="eyebrow">Private cloud</p><h2>Device sync</h2></div><span class="status-pill${pillClass}">${pillLabel}</span></div>
       <p class="sync-message">${escapeHtml(sync.message)}</p>
       ${sync.email && isSignedIn ? `<p class="sync-account">${escapeHtml(sync.email)}</p>` : ""}

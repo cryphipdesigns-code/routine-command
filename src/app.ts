@@ -1,10 +1,11 @@
-import type { AppState, Comparator, HabitDraft, InputType } from "./types";
-import { CloudSyncController } from "./data/cloud-sync";
+import type { AppState, Comparator, ExerciseDetails, HabitDraft, InputType } from "./types";
+import { CloudSyncController, type CloudSyncSnapshot } from "./data/cloud-sync";
 import { ruleForDate } from "./domain/compliance";
 import { addDays, dayName, todayKey } from "./domain/dates";
 import { TrackerStore } from "./state/store";
 import { escapeHtml, icon } from "./ui";
-import { renderShell } from "./views/shell";
+import { renderCloudSync } from "./views/settings";
+import { renderShell, renderSyncStatus } from "./views/shell";
 
 const HABIT_COLORS = ["#3867d6", "#0f9f82", "#d97706", "#db5c5c", "#7c5ce0", "#2485a8"];
 const HABIT_ICONS = ["target", "book-open", "sun", "activity", "flame", "droplet", "moon", "heart"];
@@ -20,7 +21,7 @@ export class TrackerApp {
 
   start(): void {
     this.store.subscribe(() => this.render());
-    this.cloudSync.subscribe(() => this.render());
+    this.cloudSync.subscribe((snapshot) => this.updateCloudSync(snapshot));
     this.root.addEventListener("click", (event) => this.handleClick(event));
     this.root.addEventListener("change", (event) => this.handleChange(event));
     this.root.addEventListener("submit", (event) => this.handleSubmit(event));
@@ -30,7 +31,18 @@ export class TrackerApp {
   }
 
   private render(): void {
+    const openExerciseDetails = new Set(
+      Array.from(this.root.querySelectorAll<HTMLDetailsElement>("[data-exercise-details][open]"))
+        .map((details) => details.dataset.exerciseDetails)
+        .filter((id): id is string => Boolean(id)),
+    );
     this.root.innerHTML = renderShell(this.store.snapshot, this.cloudSync.snapshot);
+    openExerciseDetails.forEach((habitId) => {
+      const details = this.root.querySelector<HTMLDetailsElement>(
+        `[data-exercise-details="${CSS.escape(habitId)}"]`,
+      );
+      if (details) details.open = true;
+    });
     this.updateOnlineStatus();
     if (this.modalHabitId !== null) this.showHabitModal(this.modalHabitId || undefined);
   }
@@ -41,7 +53,7 @@ export class TrackerApp {
     if (viewButton?.dataset.view) {
       this.modalHabitId = null;
       this.store.setActiveView(viewButton.dataset.view as AppState["activeView"]);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      window.scrollTo({ top: 0, behavior: "auto" });
       return;
     }
 
@@ -163,6 +175,20 @@ export class TrackerApp {
         const value = input.value.trim() === "" ? null : Number(input.value);
         this.store.setNumericLog(habitId, this.store.snapshot.selectedDate, value);
         this.toast(value === null ? "Entry cleared" : "Value saved");
+      }
+      return;
+    }
+    if (input.matches("[data-exercise-detail]")) {
+      const habitId = input.getAttribute("data-habit-id");
+      const field = input.getAttribute("data-exercise-detail") as keyof ExerciseDetails | null;
+      if (habitId && field) {
+        const value =
+          field === "durationMinutes" || field === "caloriesBurned"
+            ? numberOrNull(input.value)
+            : field === "timeOfDay"
+              ? input.value || null
+              : input.value;
+        this.store.setExerciseDetail(habitId, this.store.snapshot.selectedDate, field, value);
       }
       return;
     }
@@ -354,6 +380,13 @@ export class TrackerApp {
   private updateOnlineStatus(): void {
     const banner = this.root.querySelector<HTMLElement>(".offline-banner");
     if (banner) banner.hidden = navigator.onLine;
+  }
+
+  private updateCloudSync(snapshot: CloudSyncSnapshot): void {
+    const sidebarStatus = this.root.querySelector<HTMLElement>("[data-sync-status]");
+    if (sidebarStatus) sidebarStatus.innerHTML = renderSyncStatus(snapshot);
+    const syncCard = this.root.querySelector<HTMLElement>("[data-cloud-sync-card]");
+    if (syncCard) syncCard.outerHTML = renderCloudSync(snapshot);
   }
 }
 

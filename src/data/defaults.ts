@@ -113,7 +113,7 @@ const rule = (
 export function defaultState(): AppState {
   const today = todayKey();
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     activeView: "today",
     selectedDate: today,
     reviewAnchor: today,

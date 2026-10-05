@@ -1,6 +1,7 @@
 import type {
   AppState,
   DailyCheckin,
+  ExerciseDetails,
   Habit,
   HabitDraft,
   HabitLog,
@@ -17,6 +18,7 @@ import { ruleForDate } from "../domain/compliance";
 type Listener = (state: AppState) => void;
 type CheckinMetric = "mood" | "productivity" | "energy";
 type CheckinTime = "wakeTime" | "bedTime";
+type ExerciseDetailField = keyof ExerciseDetails;
 
 export class TrackerStore {
   private state: AppState = defaultState();
@@ -59,7 +61,15 @@ export class TrackerStore {
   setBooleanLog(habitId: string, localDate: string, value: boolean): void {
     const existing = this.findLog(habitId, localDate);
     if (existing && existing.booleanValue === value) {
-      this.removeLog(habitId, localDate);
+      if (hasExerciseDetails(existing.exerciseDetails) || existing.note) {
+        this.replaceLog({
+          ...existing,
+          booleanValue: null,
+          updatedAt: new Date().toISOString(),
+        });
+      } else {
+        this.removeLog(habitId, localDate);
+      }
       return;
     }
     const log: HabitLog = {
@@ -70,6 +80,7 @@ export class TrackerStore {
       numericValue: null,
       source: "manual",
       note: existing?.note ?? "",
+      exerciseDetails: existing?.exerciseDetails ?? null,
       updatedAt: new Date().toISOString(),
     };
     this.replaceLog(log);
@@ -89,6 +100,30 @@ export class TrackerStore {
       numericValue: value,
       source: "manual",
       note: existing?.note ?? "",
+      exerciseDetails: existing?.exerciseDetails ?? null,
+      updatedAt: new Date().toISOString(),
+    };
+    this.replaceLog(log);
+  }
+
+  setExerciseDetail(
+    habitId: string,
+    localDate: string,
+    field: ExerciseDetailField,
+    value: string | number | null,
+  ): void {
+    const existing = this.findLog(habitId, localDate);
+    const current = normalizeExerciseDetails(existing?.exerciseDetails);
+    const exerciseDetails: ExerciseDetails = { ...current, [field]: value };
+    const log: HabitLog = {
+      id: existing?.id ?? crypto.randomUUID(),
+      habitId,
+      localDate,
+      booleanValue: existing?.booleanValue ?? null,
+      numericValue: existing?.numericValue ?? null,
+      source: existing?.source ?? "manual",
+      note: existing?.note ?? "",
+      exerciseDetails,
       updatedAt: new Date().toISOString(),
     };
     this.replaceLog(log);
@@ -365,7 +400,14 @@ function normalizeState(state: AppState): AppState {
         };
       })
     : base.rules;
-  let logs = Array.isArray(state.logs) ? state.logs : [];
+  let logs: HabitLog[] = Array.isArray(state.logs)
+    ? state.logs.map((log) => ({
+        ...log,
+        exerciseDetails: log.exerciseDetails
+          ? normalizeExerciseDetails(log.exerciseDetails)
+          : null,
+      }))
+    : [];
 
   if (savedVersion < 3) {
     const migrated = migrateStarterHabitsV3(habits, rules, logs, base);
@@ -377,7 +419,7 @@ function normalizeState(state: AppState): AppState {
   return {
     ...base,
     ...state,
-    schemaVersion: 3,
+    schemaVersion: 4,
     activeView: activeViews.includes(state.activeView) ? state.activeView : "today",
     selectedDate: state.selectedDate || todayKey(),
     reviewAnchor: state.reviewAnchor || todayKey(),
@@ -398,6 +440,31 @@ function normalizeState(state: AppState): AppState {
       showEnergy: Boolean(state.settings?.showEnergy),
     },
   };
+}
+
+function normalizeExerciseDetails(details?: Partial<ExerciseDetails> | null): ExerciseDetails {
+  return {
+    activityType: typeof details?.activityType === "string" ? details.activityType : "",
+    durationMinutes:
+      typeof details?.durationMinutes === "number" && Number.isFinite(details.durationMinutes)
+        ? details.durationMinutes
+        : null,
+    caloriesBurned:
+      typeof details?.caloriesBurned === "number" && Number.isFinite(details.caloriesBurned)
+        ? details.caloriesBurned
+        : null,
+    timeOfDay: typeof details?.timeOfDay === "string" && details.timeOfDay ? details.timeOfDay : null,
+  };
+}
+
+function hasExerciseDetails(details?: ExerciseDetails | null): boolean {
+  if (!details) return false;
+  return Boolean(
+    details.activityType ||
+      details.durationMinutes !== null ||
+      details.caloriesBurned !== null ||
+      details.timeOfDay,
+  );
 }
 
 function migrateStarterHabitsV3(

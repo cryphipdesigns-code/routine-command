@@ -79,8 +79,34 @@ test("keeps mobile navigation fixed and avoids horizontal overflow", async ({ pa
   const dimensions = await page.evaluate(() => ({
     width: document.documentElement.scrollWidth,
     viewport: window.innerWidth,
+    navBottom: document.querySelector(".bottom-nav")?.getBoundingClientRect().bottom,
+    viewportHeight: window.innerHeight,
+    viewAnimation: getComputedStyle(document.querySelector(".view-stack")!).animationName,
   }));
   expect(dimensions.width).toBeLessThanOrEqual(dimensions.viewport);
+  expect(dimensions.navBottom).toBe(dimensions.viewportHeight);
+  expect(dimensions.viewAnimation).toBe("none");
+});
+
+test("captures optional exercise details and preserves them after reload", async ({ page }) => {
+  await page.goto("/");
+  const exercise = page.locator(".habit-check", { hasText: "Exercise" });
+  await exercise.getByText("Workout details").click();
+  await exercise.locator('select[data-exercise-detail="activityType"]').selectOption("Strength");
+  await exercise.locator('input[data-exercise-detail="durationMinutes"]').fill("45");
+  await exercise.locator('input[data-exercise-detail="durationMinutes"]').dispatchEvent("change");
+  await exercise.locator('input[data-exercise-detail="caloriesBurned"]').fill("320");
+  await exercise.locator('input[data-exercise-detail="caloriesBurned"]').dispatchEvent("change");
+  await exercise.locator('input[data-exercise-detail="timeOfDay"]').fill("07:30");
+  await exercise.locator('input[data-exercise-detail="timeOfDay"]').dispatchEvent("change");
+
+  await page.reload();
+  const restoredExercise = page.locator(".habit-check", { hasText: "Exercise" });
+  await restoredExercise.getByText("Workout details").click();
+  await expect(restoredExercise.locator('select[data-exercise-detail="activityType"]')).toHaveValue("Strength");
+  await expect(restoredExercise.locator('input[data-exercise-detail="durationMinutes"]')).toHaveValue("45");
+  await expect(restoredExercise.locator('input[data-exercise-detail="caloriesBurned"]')).toHaveValue("320");
+  await expect(restoredExercise.locator('input[data-exercise-detail="timeOfDay"]')).toHaveValue("07:30");
 });
 
 test("keeps a long authentication session in first-party cookies", async ({ page }) => {

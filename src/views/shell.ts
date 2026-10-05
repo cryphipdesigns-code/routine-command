@@ -31,7 +31,7 @@ export function renderShell(state: AppState, sync: CloudSyncSnapshot): string {
             )
             .join("")}
         </nav>
-        <div class="sidebar-footer">
+        <div class="sidebar-footer" data-sync-status>
           ${renderSyncStatus(sync)}
         </div>
       </aside>
@@ -72,7 +72,7 @@ function renderActiveView(state: AppState, sync: CloudSyncSnapshot): string {
   }
 }
 
-function renderSyncStatus(sync: CloudSyncSnapshot): string {
+export function renderSyncStatus(sync: CloudSyncSnapshot): string {
   const syncing = sync.phase === "syncing" || sync.phase === "sending-link";
   const title = sync.phase === "synced" ? "Cloud synced" : syncing ? "Syncing" : "Saved locally";
   const detail = sync.phase === "synced" ? sync.email ?? "Private account" : "Offline-ready";

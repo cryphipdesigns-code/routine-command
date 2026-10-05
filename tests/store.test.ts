@@ -114,4 +114,28 @@ describe("habit lifecycle", () => {
     expect(ruleForDate(store.snapshot.rules, "habit-exercise", "2026-10-03")).toBeNull();
     expect(ruleForDate(store.snapshot.rules, "habit-exercise", "2026-10-04")).not.toBeNull();
   });
+
+  it("retains optional workout details when completion is toggled", async () => {
+    const store = new TrackerStore(new MemoryRepository());
+    await store.initialize();
+    const date = store.snapshot.selectedDate;
+
+    store.setExerciseDetail("habit-exercise", date, "activityType", "Strength");
+    store.setExerciseDetail("habit-exercise", date, "durationMinutes", 45);
+    store.setExerciseDetail("habit-exercise", date, "caloriesBurned", 320);
+    store.setExerciseDetail("habit-exercise", date, "timeOfDay", "07:30");
+    store.setBooleanLog("habit-exercise", date, true);
+    store.setBooleanLog("habit-exercise", date, true);
+
+    const log = store.snapshot.logs.find(
+      (item) => item.habitId === "habit-exercise" && item.localDate === date,
+    );
+    expect(log?.booleanValue).toBeNull();
+    expect(log?.exerciseDetails).toEqual({
+      activityType: "Strength",
+      durationMinutes: 45,
+      caloriesBurned: 320,
+      timeOfDay: "07:30",
+    });
+  });
 });
