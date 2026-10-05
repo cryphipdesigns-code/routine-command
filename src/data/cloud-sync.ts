@@ -112,10 +112,10 @@ export class CloudSyncController {
     });
   }
 
-  async sendSignInLink(email: string): Promise<void> {
-    if (!this.client) return;
+  async sendSignInLink(email: string): Promise<boolean> {
+    if (!this.client) return false;
     const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedEmail) return;
+    if (!normalizedEmail) return false;
     this.setState({
       ...this.state,
       phase: "sending-link",
@@ -129,7 +129,7 @@ export class CloudSyncController {
     });
     if (error) {
       this.setError(error.message);
-      return;
+      return false;
     }
     this.setState({
       ...this.state,
@@ -137,6 +137,32 @@ export class CloudSyncController {
       email: normalizedEmail,
       message: "Check your email and open the sign-in link on this device.",
     });
+    return true;
+  }
+
+  async verifyCode(email: string, token: string): Promise<boolean> {
+    if (!this.client) return false;
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedToken = token.replace(/\s/g, "");
+    if (!normalizedEmail || !normalizedToken) return false;
+    this.setState({
+      ...this.state,
+      phase: "syncing",
+      email: normalizedEmail,
+      message: "Verifying your sign-in code…",
+    });
+    const { data, error } = await this.client.auth.verifyOtp({
+      email: normalizedEmail,
+      token: normalizedToken,
+      type: "email",
+    });
+    if (error) {
+      this.setError(error.message);
+      return false;
+    }
+    this.session = data.session;
+    if (this.session) await this.reconcile();
+    return Boolean(this.session);
   }
 
   async signOut(): Promise<void> {

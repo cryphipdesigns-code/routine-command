@@ -205,7 +205,23 @@ export class TrackerApp {
         this.toast("Enter your email address");
         return;
       }
-      void this.cloudSync.sendSignInLink(email).then(() => this.toast("Sign-in link sent"));
+      void this.cloudSync
+        .sendSignInLink(email)
+        .then((sent) => this.toast(sent ? "Sign-in email sent" : "Email could not be sent"));
+      return;
+    }
+    if (form.matches("#syncCodeForm")) {
+      event.preventDefault();
+      const data = new FormData(form);
+      const email = String(data.get("email") ?? "").trim();
+      const code = String(data.get("code") ?? "").trim();
+      if (!email || !code) {
+        this.toast("Enter your email and sign-in code");
+        return;
+      }
+      void this.cloudSync
+        .verifyCode(email, code)
+        .then((verified) => this.toast(verified ? "Signed in and synced" : "Code could not be verified"));
       return;
     }
     if (!form.matches("#habitForm")) return;

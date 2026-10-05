@@ -98,3 +98,17 @@ test("keeps a long authentication session in first-party cookies", async ({ page
 
   expect(result).toEqual({ matches: true, localCopy: null });
 });
+
+test("offers a scanner-safe sign-in code fallback", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('[data-view="settings"]:visible').first().click();
+  await expect(page.locator("#syncCodeForm")).toBeVisible();
+  await expect(page.locator('#syncCodeForm input[name="email"]')).toHaveAttribute(
+    "autocomplete",
+    "email",
+  );
+  await expect(page.locator('#syncCodeForm input[name="code"]')).toHaveAttribute(
+    "autocomplete",
+    "one-time-code",
+  );
+});

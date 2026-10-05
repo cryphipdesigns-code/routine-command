@@ -885,6 +885,11 @@ h3 {
 .sync-account { margin: 10px 0 15px; color: var(--ink); font-size: 0.75rem; font-weight: 700; }
 .sync-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 10px; margin-top: 16px; }
 .sync-form .primary-button { white-space: nowrap; }
+.auth-divider { display: flex; align-items: center; gap: 10px; margin: 17px 0 0; color: var(--quiet); font-size: 0.66rem; }
+.auth-divider::before,
+.auth-divider::after { flex: 1; height: 1px; background: var(--line); content: ""; }
+.sync-code-form { grid-template-columns: minmax(0, 1fr) minmax(120px, 0.45fr) auto; margin-top: 11px; }
+.sync-code-form .secondary-button { white-space: nowrap; }
 .integration-card > p { color: var(--muted); font-size: 0.78rem; line-height: 1.55; }
 .integration-preview { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 17px; }
 .integration-preview span { display: flex; align-items: center; gap: 7px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); font-size: 0.72rem; background: var(--panel-muted); }
@@ -1060,6 +1065,7 @@ h3 {
   .habit-manager-card p { max-width: 45vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .danger-zone { display: grid; }
   .sync-form { grid-template-columns: 1fr; }
+  .sync-code-form { grid-template-columns: 1fr; }
   .danger-button { width: 100%; }
   .bottom-nav { position: fixed; right: 9px; bottom: calc(8px + env(safe-area-inset-bottom)); left: 9px; z-index: 70; display: grid; grid-template-columns: repeat(4, 1fr); min-height: 61px; padding: 6px; border: 1px solid rgba(255, 255, 255, 0.74); border-radius: 20px; background: rgba(250, 252, 254, 0.92); box-shadow: 0 14px 45px rgba(21, 32, 48, 0.18); backdrop-filter: blur(20px); }
   .bottom-nav button { display: grid; place-items: center; gap: 2px; border-radius: 14px; color: var(--muted); font-size: 0.62rem; font-weight: 700; background: transparent; }
