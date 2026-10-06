@@ -38,7 +38,6 @@ export function renderToday(state: AppState): string {
         copy: isToday(state.selectedDate)
           ? "One small check-in at a time."
           : "Review or update this day without changing the plan.",
-        action: habits.length ? `<button class="secondary-button" data-action="day-exception">${icon("today", 18)} Exceptions</button>` : "",
       })}
 
       <section class="date-toolbar surface compact-surface" aria-label="Choose date">
@@ -94,6 +93,10 @@ export function renderToday(state: AppState): string {
             </details>`
           : ""
       }
+
+      ${habits.length ? `<footer class="today-plan-footer">
+        <button class="secondary-button" data-action="day-exception">${icon("today", 18)} Exceptions</button>
+      </footer>` : ""}
     </div>
   `;
 }
@@ -176,7 +179,7 @@ function renderHabitCheck(state: AppState, habit: Habit, status: string): string
                   aria-label="${isSlip ? "Undo slip" : "Log slip"}: ${escapeHtml(habit.name)}"
                   aria-pressed="${isSlip}"
                   ${disabled ? "disabled" : ""}
-                >${icon("close", 15)}</button>
+                >${icon("close", 22)}</button>
               </div>`
             : `<button
                 class="completion-button ${isComplete ? "is-complete" : ""}"
