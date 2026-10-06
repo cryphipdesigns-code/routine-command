@@ -87,6 +87,23 @@ export interface UserSettings {
   personalReward: string;
   rewardTarget: number;
   signalTargets: SignalTargets;
+  notifications: NotificationSettings;
+}
+
+export interface NotificationSettings {
+  enabled: boolean;
+  enabledAt: string | null;
+  evening: boolean;
+  eveningTime: string;
+  slips: boolean;
+  skips: boolean;
+  trends: boolean;
+  trendTime: string;
+  quietStart: string;
+  quietEnd: string;
+  tone: "direct" | "relentless";
+  quotes: boolean;
+  showHabitNames: boolean;
 }
 
 export interface AppState {

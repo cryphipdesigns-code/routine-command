@@ -1,5 +1,6 @@
 import type { AppState, Habit, HabitRule } from "../types";
 import { todayKey } from "../domain/dates";
+import { defaultNotifications } from "../domain/notifications";
 
 const createdAt = new Date().toISOString();
 
@@ -132,6 +133,7 @@ export function defaultState(): AppState {
       appBadgeEnabled: false,
       personalReward: "",
       rewardTarget: 0.8,
+      notifications: { ...defaultNotifications },
       signalTargets: {
         caloriesMax: 2200,
         wakeTimeLatest: null,

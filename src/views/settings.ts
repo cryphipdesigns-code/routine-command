@@ -2,6 +2,7 @@ import type { AppState } from "../types";
 import type { CloudSyncSnapshot } from "../data/cloud-sync";
 import { escapeHtml, icon } from "../ui";
 import { pageIntro } from "./shared";
+import { renderNotificationSettings } from "./notifications";
 
 export function renderSettings(state: AppState, sync: CloudSyncSnapshot): string {
   return `
@@ -13,6 +14,7 @@ export function renderSettings(state: AppState, sync: CloudSyncSnapshot): string
       })}
       <section class="settings-grid">
         ${renderCloudSync(sync)}
+        ${renderNotificationSettings(state)}
         <div class="section-block settings-card">
           <div class="section-heading"><div><p class="eyebrow">App</p><h2>Refresh Routine Command</h2></div></div>
           <p class="settings-note">On the Home Screen app, pull down from the top of any page. You can also refresh manually here.</p>

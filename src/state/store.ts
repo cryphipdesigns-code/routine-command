@@ -15,6 +15,7 @@ import type { StateRepository } from "../data/repository";
 import { defaultState } from "../data/defaults";
 import { addDays, parseDateKey, toDateKey, todayKey } from "../domain/dates";
 import { ruleForDate } from "../domain/compliance";
+import { normalizeNotifications } from "../domain/notifications";
 
 type Listener = (state: AppState) => void;
 type CheckinMetric = "mood" | "productivity" | "energy";
@@ -557,6 +558,7 @@ function normalizeState(state: AppState): AppState {
       timezone: state.settings?.timezone || base.settings.timezone,
       showEnergy: Boolean(state.settings?.showEnergy),
       appBadgeEnabled: Boolean(state.settings?.appBadgeEnabled),
+      notifications: normalizeNotifications(state.settings?.notifications),
       personalReward:
         typeof state.settings?.personalReward === "string"
           ? state.settings.personalReward.slice(0, 80)

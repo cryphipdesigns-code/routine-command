@@ -1,5 +1,8 @@
 project_id = "routine_command"
 
+[functions.routine-command-push]
+verify_jwt = false
+
 [auth]
 site_url = "https://cryphipdesigns-code.github.io/routine-command/"
 additional_redirect_urls = ["http://127.0.0.1:4175", "http://127.0.0.1:4175/", "http://localhost:4175", "http://localhost:4175/", "https://cryphipdesigns-code.github.io/routine-command/"]

@@ -177,6 +177,28 @@ export class CloudSyncController {
     await this.reconcile();
   }
 
+  async pushRequest<T>(body: Record<string, unknown>): Promise<T> {
+    if (!this.client || !this.session) throw new Error("Sign in to device sync first.");
+    const { data, error } = await this.client.functions.invoke("routine-command-push", { body });
+    if (error) {
+      const response = "context" in error ? error.context as Response : null;
+      if (response?.json) {
+        const detail = await response.json().catch(() => null);
+        if (detail?.error) throw new Error(String(detail.error));
+      }
+      throw new Error("Push service is unavailable. Check your connection and try again.");
+    }
+    return data as T;
+  }
+
+  async dispatchAccountability(): Promise<void> {
+    if (!this.client || !this.session || !navigator.onLine || !this.store.snapshot.settings.notifications.enabled) return;
+    if (this.pushTimer !== null) window.clearTimeout(this.pushTimer);
+    this.pushTimer = null;
+    await this.pushLocalState();
+    await this.pushRequest({ action: "dispatch" });
+  }
+
   private schedulePush(): void {
     if (this.pushTimer !== null) window.clearTimeout(this.pushTimer);
     this.pushTimer = window.setTimeout(() => {

@@ -5,8 +5,8 @@ import type {
   HabitLog,
   HabitRule,
   PeriodStats,
-} from "../types";
-import { dateRange, isFuture, isPast, parseDateKey, todayKey } from "./dates";
+} from "../types.ts";
+import { dateRange, isFuture, isPast, parseDateKey, todayKey } from "./dates.ts";
 
 export function ruleForDate(
   rules: HabitRule[],

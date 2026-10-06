@@ -1,7 +1,9 @@
-import type { AppState, Comparator, ExerciseDetails, Habit, HabitDraft, HabitDirection, InputType } from "./types";
+import type { AppState, Comparator, ExerciseDetails, Habit, HabitDraft, HabitDirection, InputType, NotificationSettings } from "./types";
 import { CloudSyncController, type CloudSyncSnapshot } from "./data/cloud-sync";
+import { currentPushSubscription, enablePushNotifications, pushSupportMessage, removeDevicePush, sendTestPush } from "./data/push-notifications";
 import { evaluateHabitDay, ruleForDate } from "./domain/compliance";
-import { addDays, dayName, formatShortDate, todayKey } from "./domain/dates";
+import { addDays, dayName, formatShortDate, parseDateKey, toDateKey, todayKey } from "./domain/dates";
+import { buildAccountabilityNotice, type AccountabilityNotice } from "./domain/notifications";
 import {
   isDaySecured,
   isRecoveryCompletion,
@@ -83,6 +85,8 @@ export class TrackerApp {
   private pullStartY: number | null = null;
   private pullDistance = 0;
   private isRefreshing = false;
+  private pushBusy = false;
+  private pushDeviceMessage = "Checking this device…";
 
   constructor(
     private readonly root: HTMLElement,
@@ -91,6 +95,7 @@ export class TrackerApp {
   ) {}
 
   start(): void {
+    this.openNotificationDate();
     this.store.subscribe(() => {
       this.render();
       void this.updateAppBadge();
@@ -111,6 +116,7 @@ export class TrackerApp {
     window.addEventListener("touchcancel", () => this.cancelPullRefresh(), { passive: true });
     this.render();
     void this.updateAppBadge();
+    void this.updatePushDeviceStatus();
   }
 
   private render(): void {
@@ -127,6 +133,7 @@ export class TrackerApp {
       if (details) details.open = true;
     });
     this.updateOnlineStatus();
+    this.renderPushDeviceStatus();
     if (this.modalHabitId !== null) this.showHabitModal(this.modalHabitId || undefined);
     if (this.exceptionContext) this.showExceptionModal();
   }
@@ -181,7 +188,12 @@ export class TrackerApp {
           if (value && !before.successful && after.successful) {
             this.celebrateCompletion(habit, recovery, wasDaySecured, beforeMomentum);
           } else if (!value && after.status === "off-target") {
-            this.toast("Slip logged. The next choice is a fresh one.", "recovery");
+            const kind = after.rule?.direction === "avoid" ? "slip" : "skip";
+            const settings = this.store.snapshot.settings.notifications;
+            if (localDate === todayKey() && !habit.optional && (kind === "slip" ? settings.slips : settings.skips)) {
+              this.showAccountability(buildAccountabilityNotice(this.store.snapshot, kind, localDate, habit));
+              void this.cloudSync.dispatchAccountability().catch(() => console.warn("Accountability push will retry on the scheduled check."));
+            } else this.toast(kind === "slip" ? "Slip logged" : "Skip recorded");
           } else {
             this.toast("Entry cleared");
           }
@@ -279,6 +291,19 @@ export class TrackerApp {
       case "enable-app-badge":
         void this.enableAppBadge();
         break;
+      case "enable-push":
+        void this.runPushAction(() => enablePushNotifications(this.store, this.cloudSync), "Push enabled. Send a test to check your phone.");
+        break;
+      case "test-push":
+        void this.runPushAction(() => sendTestPush(this.cloudSync), "Test notification sent");
+        break;
+      case "disable-push":
+        this.store.updateSettings({ notifications: { ...this.store.snapshot.settings.notifications, enabled: false } });
+        void this.runPushAction(() => removeDevicePush(this.cloudSync), "Push notifications turned off");
+        break;
+      case "close-accountability":
+        this.root.querySelector(".accountability-alert")?.remove();
+        break;
       case "disable-app-badge":
         this.store.updateSettings({ appBadgeEnabled: false });
         void this.clearAppBadge();
@@ -290,7 +315,10 @@ export class TrackerApp {
         }
         break;
       case "sign-out":
-        void this.cloudSync.signOut().then(() => this.toast("Signed out"));
+        void removeDevicePush(this.cloudSync).catch(() => {}).then(() => this.cloudSync.signOut()).then(() => {
+          this.toast("Signed out");
+          void this.updatePushDeviceStatus();
+        });
         break;
       case "sync-now":
         void this.cloudSync.syncNow().then(() => this.toast("Sync checked"));
@@ -377,6 +405,17 @@ export class TrackerApp {
 
   private handleChange(event: Event): void {
     const input = event.target as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+    if (input.matches("[data-notification-setting]")) {
+      const key = input.getAttribute("data-notification-setting") as keyof NotificationSettings;
+      const current = this.store.snapshot.settings.notifications;
+      if (["eveningTime", "trendTime", "quietStart", "quietEnd"].includes(key) && !/^([01]\d|2[0-3]):[0-5]\d$/.test(input.value)) {
+        this.toast("Choose a valid time");
+        return;
+      }
+      const value = input instanceof HTMLInputElement && input.type === "checkbox" ? input.checked : input.value;
+      this.store.updateSettings({ notifications: { ...current, [key]: value } });
+      return;
+    }
     if (input.closest("#exceptionForm")) {
       const form = input.closest<HTMLFormElement>("#exceptionForm")!;
       if (input.name === "habitId" || input.name === "localDate") {
@@ -723,9 +762,55 @@ export class TrackerApp {
     const root = this.root.querySelector<HTMLElement>("#toastRoot");
     if (!root) return;
     root.innerHTML = `<div class="toast ${tone === "recovery" ? "recovery" : ""}">${icon(tone === "recovery" ? "sparkles" : "check", 17)} ${escapeHtml(message)}</div>`;
+    const toast = root.firstElementChild;
     window.setTimeout(() => {
-      if (root.isConnected) root.innerHTML = "";
+      if (root.isConnected && root.firstElementChild === toast) root.innerHTML = "";
     }, 2400);
+  }
+
+  private showAccountability(notice: AccountabilityNotice): void {
+    const root = this.root.querySelector<HTMLElement>("#toastRoot");
+    if (!root) return;
+    const context = notice.body.split("\n")[0];
+    root.innerHTML = `<div class="accountability-alert" role="status"><button class="icon-button" data-action="close-accountability" aria-label="Dismiss challenge">${icon("close", 18)}</button><p class="eyebrow">Command check · Original challenge</p><strong>${escapeHtml(notice.title)}</strong><small>${escapeHtml(context)}</small><p>${escapeHtml(notice.challenge)}</p>${notice.quote ? `<blockquote>“${escapeHtml(notice.quote.text)}”<cite>${escapeHtml(notice.quote.author)} · <a href="${escapeHtml(notice.quote.source)}" target="_blank" rel="noopener noreferrer">Source</a></cite></blockquote>` : ""}<button class="primary-button" data-action="close-accountability">Make the next choice count</button></div>`;
+  }
+
+  private openNotificationDate(): void {
+    const url = new URL(window.location.href);
+    const date = url.searchParams.get("date");
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date) || toDateKey(parseDateKey(date)) !== date) return;
+    this.store.setSelectedDate(date);
+    this.store.setActiveView("today");
+    url.searchParams.delete("date");
+    url.searchParams.delete("habit");
+    window.history.replaceState(null, "", url.href);
+  }
+
+  private async runPushAction(action: () => Promise<void>, success: string): Promise<void> {
+    if (this.pushBusy) return;
+    this.pushBusy = true;
+    this.pushDeviceMessage = "Working…";
+    this.renderPushDeviceStatus();
+    try { await action(); this.toast(success); }
+    catch (error) { this.toast(error instanceof Error ? error.message : "Push setup could not complete"); }
+    finally { this.pushBusy = false; await this.updatePushDeviceStatus(); }
+  }
+
+  private async updatePushDeviceStatus(): Promise<void> {
+    const unsupported = pushSupportMessage();
+    try {
+      const subscription = unsupported ? null : await currentPushSubscription();
+      this.pushDeviceMessage = unsupported ?? (subscription ? this.store.snapshot.settings.notifications.enabled ? "This device is subscribed. Use Send test notification to check delivery." : "This device is ready; reminders are turned off." : "Not enabled on this device. On iPhone, enable from the installed Home Screen app.");
+    } catch { this.pushDeviceMessage = "Could not check this device. Try enabling push again."; }
+    this.renderPushDeviceStatus();
+  }
+
+  private renderPushDeviceStatus(): void {
+    const status = this.root.querySelector<HTMLElement>("[data-push-device-status]");
+    if (status) status.textContent = this.pushDeviceMessage;
+    this.root.querySelectorAll<HTMLButtonElement>('[data-action="enable-push"], [data-action="test-push"], [data-action="disable-push"]').forEach((button) => {
+      button.disabled = this.pushBusy || (button.dataset.action === "test-push" && !this.store.snapshot.settings.notifications.enabled);
+    });
   }
 
   private updateOnlineStatus(): void {

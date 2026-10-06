@@ -152,7 +152,7 @@ function renderHabitCheck(state: AppState, habit: Habit, status: string): string
       <div class="habit-check-copy">
         <div class="habit-name-line"><h3>${escapeHtml(habit.name)}</h3>${isAvoid ? '<span class="direction-badge">Avoid</span>' : ""}${habit.optional ? '<span class="optional-badge">Optional</span>' : ""}</div>
         <p>${escapeHtml(targetLabel(habit, rule))}</p>
-        <div class="habit-day-meta"><span class="habit-state-label">${escapeHtml(habitStatusText(isAvoid, status))}</span><button class="day-plan-button ${exception ? "has-exception" : ""}" data-action="day-exception" data-habit-id="${habit.id}" aria-label="Day exception: ${escapeHtml(habit.name)}">${exception ? `Added to this day${exception.reason ? ` · ${escapeHtml(exception.reason)}` : ""}` : "Day exception"}</button></div>
+        <div class="habit-day-meta"><span class="habit-state-label">${escapeHtml(!isAvoid && rule.inputType === "boolean" && isSlip ? "Skipped" : habitStatusText(isAvoid, status))}</span><button class="day-plan-button ${exception ? "has-exception" : ""}" data-action="day-exception" data-habit-id="${habit.id}" aria-label="Day exception: ${escapeHtml(habit.name)}">${exception ? `Added to this day${exception.reason ? ` · ${escapeHtml(exception.reason)}` : ""}` : "Day exception"}</button>${!isAvoid && rule.inputType === "boolean" && !isComplete ? `<button class="day-plan-button skip-plan-button" data-action="set-boolean" data-value="false" data-habit-id="${habit.id}" aria-label="${isSlip ? "Undo skip" : "Skip today"}: ${escapeHtml(habit.name)}" ${disabled ? "disabled" : ""}>${isSlip ? "Undo skip" : "Skip today"}</button>` : ""}</div>
       </div>
       ${
         rule.inputType === "boolean"

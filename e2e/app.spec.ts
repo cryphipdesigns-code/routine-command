@@ -1,5 +1,36 @@
 import { expect, test } from "@playwright/test";
 
+test("records an explicit Build skip with an original challenge and allows recovery", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Skip today: Sunlight", exact: true }).click();
+  await expect(page.locator(".accountability-alert")).toContainText("Original challenge");
+  await expect(page.locator(".accountability-alert")).toContainText("Skip recorded");
+  await expect(page.locator(".progress-ring strong")).toHaveText("0");
+  await page.getByRole("button", { name: "Dismiss challenge" }).click();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Undo skip: Sunlight", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Complete Sunlight", exact: true }).click();
+  await expect(page.locator(".progress-ring strong")).toHaveText("1");
+});
+
+test("retains notification preferences, shows quote sources, and fits the phone", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('[data-view="settings"]:visible').first().click();
+  await expect(page.getByRole("heading", { name: "Command notifications" })).toBeVisible();
+  await page.getByLabel("Evening reminder time").fill("19:45");
+  await page.getByLabel("Evening reminder time").blur();
+  await page.locator('[data-notification-setting="tone"]').selectOption("direct");
+  await page.locator('[data-notification-setting="showHabitNames"]').uncheck();
+  await page.reload();
+  await expect(page.getByLabel("Evening reminder time")).toHaveValue("19:45");
+  await expect(page.locator('[data-notification-setting="tone"]')).toHaveValue("direct");
+  await expect(page.locator('[data-notification-setting="showHabitNames"]')).not.toBeChecked();
+  await page.locator(".quote-sources summary").click();
+  await expect(page.locator(".quote-sources")).toContainText("Eric Thomas");
+  await expect(page.locator(".quote-sources")).toContainText("Andrew Huberman");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test("adds a neutral exemption, retains it after reload, and restores the entry", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Complete Sunlight" }).click();
@@ -158,7 +189,7 @@ test("stores a personal reward and exposes the free Home Screen badge control", 
   await page.getByLabel("Personal reward").fill("Movie night");
   await page.getByLabel("Personal reward").blur();
   await page.getByLabel("Unlock target").selectOption("0.9");
-  await expect(page.getByRole("button", { name: "Enable" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Enable", exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByLabel("Personal reward")).toHaveValue("Movie night");
   await expect(page.getByLabel("Unlock target")).toHaveValue("0.9");

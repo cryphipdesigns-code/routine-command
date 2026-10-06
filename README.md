@@ -21,6 +21,9 @@ storage, and source code completely separate from Cash Command and Reef Command.
 - Responsive desktop sidebar and mobile bottom navigation
 - Installable PWA shell and offline asset cache
 - Supabase Row Level Security that isolates every user's records
+- Neutral day exemptions and allowance-day swaps
+- Opt-in Web Push: evening Build check-ins, logged slips/skips, and evidence-based pattern nudges
+- Configurable direct/relentless original challenges with short, sourced motivational quotes
 
 The app starts with editable daily yes/no habits for **15 min Read**,
 **15 min Read Bible**, **BOM**, and **Cold**, alongside the existing examples.
@@ -58,6 +61,38 @@ npm run preview
 - `public/` — PWA manifest, icon, and service worker
 - `tests/` — deterministic compliance tests
 - `supabase/migrations/` — private cloud-state schema
+- `supabase/functions/routine-command-push/` — authenticated push subscription and delivery service
+- `scripts/configure-push.mjs` — first-time push credentials, through stdin into Supabase secrets and Vault
+
+## Push notifications
+
+The browser's permission prompt must be enabled from Settings → Command notifications.
+On iPhone, use the installed Home Screen app on iOS 16.4 or later. The phone must
+receive a real test push to confirm delivery; browser automation alone cannot
+verify the owner's device.
+
+The existing Supabase project runs a five-minute cron check. Slips and explicit
+skips also request immediate dispatch after the state is synced. Quiet hours,
+category toggles, exemptions, start dates, optional habits, and a four-per-device
+daily cap apply. Delivery is deduplicated atomically in Postgres. Missing records
+are called unconfirmed; they are never presented as proof of a skipped action.
+Push permission and coaching preferences are opt-in; Daily Signals are excluded.
+
+First deployment uses the linked Routine Command project only:
+
+```bash
+npx supabase db push --linked
+node scripts/configure-push.mjs
+npx supabase functions deploy routine-command-push --project-ref xevhawcjknatepvsigyf --use-api
+```
+
+The setup helper preserves existing VAPID keys, stores no private key files, and
+feeds credentials into CLI stdin. Function JWT verification is disabled at the
+gateway because scheduled jobs use a separate Vault credential. The function
+itself verifies user JWTs for all subscription, dispatch, and test operations;
+only public VAPID configuration is anonymous. Push endpoints are restricted to
+known browser push services. Private subscription and delivery tables are not
+accessible to browser roles. Do not deploy with `--prune` or modify other projects.
 
 ## Compliance semantics
 
