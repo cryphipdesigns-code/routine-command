@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AppState } from "../src/types";
 import type { StateRepository } from "../src/data/repository";
-import { ruleForDate } from "../src/domain/compliance";
+import { evaluateHabitDay, periodStats, ruleForDate } from "../src/domain/compliance";
 import { TrackerStore } from "../src/state/store";
 
 class MemoryRepository implements StateRepository {
@@ -25,6 +25,58 @@ afterEach(() => {
 });
 
 describe("habit lifecycle", () => {
+  it("swaps allowance dates atomically, preserves logs, and restores the normal plan", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 2, 12));
+    const repository = new MemoryRepository();
+    const store = new TrackerStore(repository);
+    await store.initialize();
+    vi.setSystemTime(new Date(2026, 9, 5, 12));
+    const habit = store.snapshot.habits.find((item) => item.id === "habit-exercise")!;
+    const rulesBefore = structuredClone(store.snapshot.rules);
+    store.setBooleanLog(habit.id, "2026-10-05", true);
+    const logsBefore = structuredClone(store.snapshot.logs);
+    expect(store.setHabitDayExceptions(habit.id, [
+      { localDate: "2026-10-05", applicable: false, reason: "Holiday" },
+      { localDate: "2026-10-03", applicable: true, reason: "Holiday" },
+    ])).toBe(true);
+    const evaluate = (localDate: string) => evaluateHabitDay({ habit, rules: store.snapshot.rules, logs: store.snapshot.logs, exceptions: store.snapshot.exceptions, localDate, today: "2026-10-05" });
+    expect(evaluate("2026-10-05").applicable).toBe(false);
+    expect(evaluate("2026-10-05").successful).toBe(false);
+    expect(evaluate("2026-10-03").status).toBe("missed");
+    expect(evaluate("2026-10-04").applicable).toBe(false);
+    expect(store.snapshot.rules).toEqual(rulesBefore);
+    expect(store.snapshot.logs).toEqual(logsBefore);
+    const stats = periodStats({ habit, rules: store.snapshot.rules, logs: store.snapshot.logs, exceptions: store.snapshot.exceptions, start: "2026-10-05", end: "2026-10-05", today: "2026-10-05" });
+    expect(stats.applicable).toBe(0);
+    expect(stats.successful).toBe(0);
+    expect(stats.missed).toBe(0);
+    expect(stats.adherence).toBeNull();
+    await vi.waitFor(() => expect(repository.state?.exceptions).toHaveLength(2));
+    const restored = new TrackerStore(repository);
+    await restored.initialize();
+    expect(restored.snapshot.exceptions).toEqual(store.snapshot.exceptions);
+    expect(store.setHabitDayExceptions(habit.id, [{ localDate: "2026-10-05", applicable: null, reason: "" }])).toBe(true);
+    expect(evaluate("2026-10-05").status).toBe("success");
+    expect(store.snapshot.exceptions).toHaveLength(1);
+  });
+
+  it("rejects an invalid swap without saving its first exception", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 5, 12));
+    const store = new TrackerStore(new MemoryRepository());
+    await store.initialize();
+    expect(store.setHabitDayExceptions("habit-exercise", [
+      { localDate: "2026-10-05", applicable: false, reason: "Holiday" },
+      { localDate: "2026-02-30", applicable: true, reason: "Holiday" },
+    ])).toBe(false);
+    expect(store.snapshot.exceptions).toHaveLength(0);
+    expect(store.setHabitDayExceptions("habit-exercise", [
+      { localDate: "2020-01-01", applicable: true, reason: "Before start" },
+    ])).toBe(false);
+    expect(store.snapshot.exceptions).toHaveLength(0);
+  });
+
   it("upgrades legacy local data without replacing the user's records", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 9, 2, 12));

@@ -20,6 +20,10 @@ export function renderToday(state: AppState): string {
   }));
   const scheduled = evaluations.filter((item) => item.evaluation.applicable);
   const resting = evaluations.filter((item) => !item.evaluation.applicable);
+  const exempt = resting.filter(({ habit, evaluation }) => evaluation.rule && state.exceptions.some(
+    (item) => item.habitId === habit.id && item.localDate === state.selectedDate && !item.applicable,
+  ));
+  const normalResting = resting.filter((item) => !exempt.includes(item));
   const required = scheduled.filter((item) => !item.habit.optional);
   const complete = required.filter((item) => item.evaluation.successful).length;
   const progress = required.length ? complete / required.length : 0;
@@ -33,6 +37,7 @@ export function renderToday(state: AppState): string {
         copy: isToday(state.selectedDate)
           ? "One small check-in at a time."
           : "Review or update this day without changing the plan.",
+        action: habits.length ? `<button class="secondary-button" data-action="day-exception">${icon("today", 18)} Exceptions</button>` : "",
       })}
 
       <section class="date-toolbar surface compact-surface" aria-label="Choose date">
@@ -69,16 +74,21 @@ export function renderToday(state: AppState): string {
         </div>
       </section>
 
+      ${exempt.length ? `<section class="section-block exempt-panel"><div class="section-heading"><div><p class="eyebrow">Adjusted plan</p><h2>Exempt / allowed today</h2></div><span class="section-count">${exempt.length}</span></div><div class="exempt-list">${exempt.map(({ habit, evaluation }) => {
+        const exception = state.exceptions.find((item) => item.habitId === habit.id && item.localDate === state.selectedDate)!;
+        return `<article class="exempt-habit" data-exempt-habit-id="${habit.id}"><div><strong>${escapeHtml(habit.name)}</strong><small>${evaluation.rule?.direction === "avoid" ? "Allowed day" : "Exempt day"}${exception.reason ? ` · ${escapeHtml(exception.reason)}` : ""} · Not scored</small></div><button class="secondary-button small" data-action="day-exception" data-habit-id="${habit.id}" aria-label="Edit exception: ${escapeHtml(habit.name)}">Edit</button></article>`;
+      }).join("")}</div></section>` : ""}
+
       ${isToday(state.selectedDate) ? renderMomentum(state) : ""}
 
       ${renderSignals(state)}
 
       ${
-        resting.length
+        normalResting.length
           ? `<details class="surface resting-panel">
-              <summary><span>${icon("moon", 18)} Not scheduled</span><span>${resting.length}</span></summary>
-              <div class="resting-list">${resting
-                .map(({ habit }) => `<span>${escapeHtml(habit.name)}</span>`)
+              <summary><span>${icon("moon", 18)} Not scheduled</span><span>${normalResting.length}</span></summary>
+              <div class="resting-list">${normalResting
+                .map(({ habit }) => `<button data-action="day-exception" data-habit-id="${habit.id}" aria-label="Day exception: ${escapeHtml(habit.name)}">${escapeHtml(habit.name)}</button>`)
                 .join("")}</div>
             </details>`
           : ""
@@ -134,6 +144,7 @@ function renderHabitCheck(state: AppState, habit: Habit, status: string): string
   const supportsExerciseDetails = habit.id === "habit-exercise";
   const isAvoid = rule.direction === "avoid";
   const isSlip = evaluation.log?.booleanValue === false;
+  const exception = state.exceptions.find((item) => item.habitId === habit.id && item.localDate === state.selectedDate);
 
   return `
     <article class="habit-check habit-status-${status}" data-habit-card-id="${habit.id}" style="--habit-color: ${habit.color}">
@@ -141,7 +152,7 @@ function renderHabitCheck(state: AppState, habit: Habit, status: string): string
       <div class="habit-check-copy">
         <div class="habit-name-line"><h3>${escapeHtml(habit.name)}</h3>${isAvoid ? '<span class="direction-badge">Avoid</span>' : ""}${habit.optional ? '<span class="optional-badge">Optional</span>' : ""}</div>
         <p>${escapeHtml(targetLabel(habit, rule))}</p>
-        <span class="habit-state-label">${escapeHtml(habitStatusText(isAvoid, status))}</span>
+        <div class="habit-day-meta"><span class="habit-state-label">${escapeHtml(habitStatusText(isAvoid, status))}</span><button class="day-plan-button ${exception ? "has-exception" : ""}" data-action="day-exception" data-habit-id="${habit.id}" aria-label="Day exception: ${escapeHtml(habit.name)}">${exception ? `Added to this day${exception.reason ? ` · ${escapeHtml(exception.reason)}` : ""}` : "Day exception"}</button></div>
       </div>
       ${
         rule.inputType === "boolean"

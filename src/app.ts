@@ -11,6 +11,7 @@ import {
 import { TrackerStore } from "./state/store";
 import { escapeHtml, icon } from "./ui";
 import { renderCloudSync } from "./views/settings";
+import { exceptionScheduleText, renderExceptionModal } from "./views/exceptions";
 import { renderShell, renderSyncStatus } from "./views/shell";
 
 const HABIT_COLORS = [
@@ -78,6 +79,7 @@ const HABIT_ICON_NAMES: Record<string, string> = {
 
 export class TrackerApp {
   private modalHabitId: string | null = null;
+  private exceptionContext: { habitId: string; localDate: string } | null = null;
   private pullStartY: number | null = null;
   private pullDistance = 0;
   private isRefreshing = false;
@@ -97,6 +99,9 @@ export class TrackerApp {
     this.root.addEventListener("click", (event) => this.handleClick(event));
     this.root.addEventListener("change", (event) => this.handleChange(event));
     this.root.addEventListener("submit", (event) => this.handleSubmit(event));
+    this.root.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") this.closeModal();
+    });
     window.addEventListener("online", () => this.updateOnlineStatus());
     window.addEventListener("offline", () => this.updateOnlineStatus());
     window.addEventListener("focus", () => void this.updateAppBadge());
@@ -123,6 +128,7 @@ export class TrackerApp {
     });
     this.updateOnlineStatus();
     if (this.modalHabitId !== null) this.showHabitModal(this.modalHabitId || undefined);
+    if (this.exceptionContext) this.showExceptionModal();
   }
 
   private handleClick(event: Event): void {
@@ -130,6 +136,7 @@ export class TrackerApp {
     const viewButton = target.closest<HTMLElement>("[data-view]");
     if (viewButton?.dataset.view) {
       this.modalHabitId = null;
+      this.exceptionContext = null;
       this.store.setActiveView(viewButton.dataset.view as AppState["activeView"]);
       window.scrollTo({ top: 0, behavior: "auto" });
       return;
@@ -217,6 +224,16 @@ export class TrackerApp {
       case "add-habit":
         this.openHabitModal();
         break;
+      case "day-exception": {
+        const state = this.store.snapshot;
+        const habitId = button.dataset.habitId ?? state.habits.find((habit) => !habit.archivedAt)?.id;
+        if (habitId) {
+          this.modalHabitId = null;
+          this.exceptionContext = { habitId, localDate: state.selectedDate };
+          this.showExceptionModal();
+        }
+        break;
+      }
       case "edit-habit":
         this.openHabitModal(button.dataset.habitId);
         break;
@@ -360,6 +377,23 @@ export class TrackerApp {
 
   private handleChange(event: Event): void {
     const input = event.target as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+    if (input.closest("#exceptionForm")) {
+      const form = input.closest<HTMLFormElement>("#exceptionForm")!;
+      if (input.name === "habitId" || input.name === "localDate") {
+        const data = new FormData(form);
+        const habitId = String(data.get("habitId"));
+        const localDate = String(data.get("localDate"));
+        this.exceptionContext = { habitId, localDate };
+        const existing = this.store.snapshot.exceptions.find((item) => item.habitId === habitId && item.localDate === localDate);
+        form.querySelector<HTMLSelectElement>('[name="applicable"]')!.value = existing ? existing.applicable ? "require" : "exempt" : "normal";
+        form.querySelector<HTMLInputElement>('[name="reason"]')!.value = existing?.reason ?? "";
+        form.querySelector<HTMLInputElement>('[name="swap"]')!.checked = false;
+        form.querySelector<HTMLInputElement>('[name="swapDate"]')!.value = "";
+        form.querySelector<HTMLElement>("#exceptionSchedule")!.textContent = exceptionScheduleText(this.store.snapshot, habitId, localDate);
+      }
+      this.syncExceptionSwap();
+      return;
+    }
     if (input.matches("[data-numeric-log]")) {
       const habitId = input.getAttribute("data-numeric-log");
       if (habitId) {
@@ -467,6 +501,35 @@ export class TrackerApp {
 
   private handleSubmit(event: SubmitEvent): void {
     const form = event.target as HTMLFormElement;
+    if (form.matches("#exceptionForm")) {
+      event.preventDefault();
+      const data = new FormData(form);
+      const habitId = String(data.get("habitId") ?? "");
+      const localDate = String(data.get("localDate") ?? "");
+      const mode = String(data.get("applicable") ?? "normal");
+      const applicable = mode === "normal" ? null : mode === "require";
+      const reason = String(data.get("reason") ?? "");
+      const changes = [{ localDate, applicable, reason }];
+      if (applicable !== null && data.get("swap") === "on") {
+        const swapDate = String(data.get("swapDate") ?? "");
+        const habit = this.store.snapshot.habits.find((item) => item.id === habitId);
+        const otherDay = habit ? evaluateHabitDay({ habit, rules: this.store.snapshot.rules, logs: this.store.snapshot.logs, exceptions: this.store.snapshot.exceptions, localDate: swapDate }) : null;
+        if (!swapDate || swapDate === localDate || !otherDay?.rule || otherDay.applicable !== applicable) {
+          this.toast(applicable ? "Choose another scheduled day to exempt" : "Choose another allowed / rest day to apply the habit");
+          return;
+        }
+        changes.push({ localDate: swapDate, applicable: !applicable, reason });
+      }
+      const context = this.exceptionContext;
+      this.exceptionContext = null;
+      if (!this.store.setHabitDayExceptions(habitId, changes)) {
+        this.exceptionContext = context;
+        this.toast("Choose a valid date while this habit is active");
+        return;
+      }
+      this.toast(changes.length === 2 ? "Days swapped — regular schedule preserved" : applicable === null ? "Normal schedule restored" : "Day exception saved");
+      return;
+    }
     if (form.matches("#syncForm")) {
       event.preventDefault();
       const email = String(new FormData(form).get("email") ?? "").trim();
@@ -548,14 +611,36 @@ export class TrackerApp {
   }
 
   private openHabitModal(habitId?: string): void {
+    this.exceptionContext = null;
     this.modalHabitId = habitId ?? "";
     this.showHabitModal(habitId);
   }
 
   private closeModal(): void {
     this.modalHabitId = null;
+    this.exceptionContext = null;
     const root = this.root.querySelector<HTMLElement>("#modalRoot");
     if (root) root.innerHTML = "";
+  }
+
+  private showExceptionModal(): void {
+    const root = this.root.querySelector<HTMLElement>("#modalRoot");
+    if (!root || !this.exceptionContext) return;
+    root.innerHTML = renderExceptionModal(this.store.snapshot, this.exceptionContext.habitId, this.exceptionContext.localDate);
+    queueMicrotask(() => root.querySelector<HTMLSelectElement>('[name="applicable"]')?.focus());
+  }
+
+  private syncExceptionSwap(): void {
+    const form = this.root.querySelector<HTMLFormElement>("#exceptionForm");
+    if (!form) return;
+    const normal = form.querySelector<HTMLSelectElement>('[name="applicable"]')!.value === "normal";
+    const checkbox = form.querySelector<HTMLInputElement>('[name="swap"]')!;
+    const date = form.querySelector<HTMLInputElement>('[name="swapDate"]')!;
+    form.querySelector<HTMLElement>(".exception-swap")!.hidden = normal;
+    if (normal) checkbox.checked = false;
+    form.querySelector<HTMLElement>(".exception-swap-date")!.hidden = !checkbox.checked;
+    date.required = checkbox.checked;
+    date.disabled = !checkbox.checked;
   }
 
   private showHabitModal(habitId?: string): void {

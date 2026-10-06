@@ -4,6 +4,7 @@ import type {
   ExerciseDetails,
   Habit,
   HabitDraft,
+  HabitDayException,
   HabitLog,
   HabitRule,
   ReviewMode,
@@ -12,7 +13,7 @@ import type {
 } from "../types";
 import type { StateRepository } from "../data/repository";
 import { defaultState } from "../data/defaults";
-import { addDays, todayKey } from "../domain/dates";
+import { addDays, parseDateKey, toDateKey, todayKey } from "../domain/dates";
 import { ruleForDate } from "../domain/compliance";
 
 type Listener = (state: AppState) => void;
@@ -352,6 +353,36 @@ export class TrackerStore {
       logs: this.state.logs.filter((log) => log.habitId !== habitId),
       exceptions: this.state.exceptions.filter((item) => item.habitId !== habitId),
     });
+  }
+
+  setHabitDayExceptions(
+    habitId: string,
+    changes: Array<{ localDate: string; applicable: boolean | null; reason: string }>,
+  ): boolean {
+    const habit = this.state.habits.find((item) => item.id === habitId && !item.archivedAt);
+    if (!habit || !changes.length || changes.some((change) =>
+      !/^\d{4}-\d{2}-\d{2}$/.test(change.localDate) ||
+      toDateKey(parseDateKey(change.localDate)) !== change.localDate ||
+      !ruleForDate(this.state.rules, habitId, change.localDate)
+    )) return false;
+
+    let exceptions = [...this.state.exceptions];
+    for (const change of changes) {
+      const existing = exceptions.find((item) => item.habitId === habitId && item.localDate === change.localDate);
+      exceptions = exceptions.filter((item) => !(item.habitId === habitId && item.localDate === change.localDate));
+      if (change.applicable !== null) {
+        const exception: HabitDayException = {
+          id: existing?.id ?? crypto.randomUUID(),
+          habitId,
+          localDate: change.localDate,
+          applicable: change.applicable,
+          reason: change.reason.trim().slice(0, 120),
+        };
+        exceptions.push(exception);
+      }
+    }
+    this.update({ ...this.state, exceptions });
+    return true;
   }
 
   updateSettings(patch: Partial<UserSettings>): void {

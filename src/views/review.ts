@@ -1,4 +1,4 @@
-import type { AppState, DayStatus, Habit } from "../types";
+import type { AppState, DayStatus, Habit, HabitDayException } from "../types";
 import { combinedPeriodStats, evaluateHabitDay, periodStats } from "../domain/compliance";
 import {
   addDays,
@@ -119,13 +119,14 @@ function renderHabitWeekRow(state: AppState, habit: Habit, dates: string[]): str
           exceptions: state.exceptions,
           localDate,
         });
-        return renderWeekCell(localDate, evaluation.status, evaluation.log?.numericValue ?? null, evaluation.rule?.unit ?? habit.unit);
+        const exception = evaluation.rule ? state.exceptions.find((item) => item.habitId === habit.id && item.localDate === localDate) : undefined;
+        return renderWeekCell(localDate, evaluation.status, evaluation.log?.numericValue ?? null, evaluation.rule?.unit ?? habit.unit, exception);
       })
       .join("")}
   `;
 }
 
-function renderWeekCell(localDate: string, status: DayStatus, numericValue: number | null, unit: string): string {
+function renderWeekCell(localDate: string, status: DayStatus, numericValue: number | null, unit: string, exception?: HabitDayException): string {
   const symbols: Record<DayStatus, string> = {
     success: icon("check", 18),
     "off-target": "!",
@@ -134,8 +135,11 @@ function renderWeekCell(localDate: string, status: DayStatus, numericValue: numb
     upcoming: "",
     "not-scheduled": "",
   };
-  const value = numericValue !== null ? `<small>${formatValue(numericValue)}${unit ? ` ${escapeHtml(unit)}` : ""}</small>` : "";
-  return `<button class="week-cell status-${status}" data-action="open-date" data-date="${localDate}" title="${status.replace("-", " ")}"><span>${symbols[status]}</span>${value}</button>`;
+  const exempt = exception?.applicable === false;
+  const label = exempt ? "Exempt / allowed" : status.replace("-", " ");
+  const title = `${label}${exception?.reason ? ` · ${exception.reason}` : ""}`;
+  const value = !exempt && numericValue !== null ? `<small>${formatValue(numericValue)}${unit ? ` ${escapeHtml(unit)}` : ""}</small>` : "";
+  return `<button class="week-cell status-${status} ${exempt ? "is-exempt" : ""}" data-action="open-date" data-date="${localDate}" title="${escapeHtml(title)}"><span>${exempt ? "E" : symbols[status]}</span>${value}</button>`;
 }
 
 function renderMonth(state: AppState, habits: Habit[], start: string, end: string): string {

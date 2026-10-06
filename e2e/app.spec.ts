@@ -1,5 +1,65 @@
 import { expect, test } from "@playwright/test";
 
+test("adds a neutral exemption, retains it after reload, and restores the entry", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Complete Sunlight" }).click();
+  await page.getByRole("button", { name: "Day exception: Sunlight", exact: true }).click();
+  await page.getByLabel("Plan for this date").selectOption("exempt");
+  await page.getByLabel("Reason").fill("Work conference");
+  await page.getByRole("button", { name: "Save exception", exact: true }).click();
+  await expect(page.locator('[data-habit-card-id="habit-sunlight"]')).toHaveCount(0);
+  await expect(page.locator('[data-exempt-habit-id="habit-sunlight"]')).toContainText("Work conference");
+  await expect(page.locator(".progress-ring strong")).toHaveText("0");
+  await page.reload();
+  await expect(page.locator('[data-exempt-habit-id="habit-sunlight"]')).toContainText("Not scored");
+  await page.locator('[data-view="review"]:visible').first().click();
+  await expect(page.locator('.week-cell.is-exempt[title="Exempt / allowed · Work conference"]')).toHaveText("E");
+  await page.locator('[data-view="today"]:visible').first().click();
+  await page.getByRole("button", { name: "Edit exception: Sunlight", exact: true }).click();
+  await page.getByLabel("Plan for this date").selectOption("normal");
+  await page.getByRole("button", { name: "Save exception", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Undo Sunlight", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".progress-ring strong")).toHaveText("1");
+});
+
+test("shifts an alcohol allowance from Sat/Sun to Sun/Mon and fits mobile", async ({ page }) => {
+  await page.goto("/");
+  await page.locator('[data-view="habits"]:visible').first().click();
+  await page.getByRole("button", { name: "Add habit" }).click();
+  await page.getByLabel("Name").fill("No alcohol");
+  await page.getByRole("radio", { name: /Avoid/ }).check();
+  await page.getByRole("button", { name: "Weekdays", exact: true }).click();
+  await page.locator("#habitForm").getByRole("button", { name: "Add habit", exact: true }).click();
+  await page.locator('[data-view="today"]:visible').first().click();
+  const dates = await page.evaluate(() => {
+    const saturday = new Date();
+    saturday.setDate(saturday.getDate() + (6 - saturday.getDay() + 7) % 7);
+    const monday = new Date(saturday);
+    monday.setDate(monday.getDate() + 2);
+    const key = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    return { saturday: key(saturday), monday: key(monday) };
+  });
+  await page.getByRole("button", { name: "Exceptions", exact: true }).click();
+  await page.getByLabel("Habit", { exact: true }).selectOption({ label: "No alcohol" });
+  await page.getByLabel("Exception date").fill(dates.monday);
+  await page.getByLabel("Plan for this date").selectOption("exempt");
+  await page.getByLabel("Reason").fill("Holiday");
+  await page.getByRole("checkbox", { name: /Swap with another day/ }).check();
+  await page.getByLabel("Swap date", { exact: true }).fill(dates.saturday);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByRole("button", { name: "Save exception", exact: true }).click();
+  await page.locator('[data-view="review"]:visible').first().click();
+  await page.getByRole("button", { name: "Month", exact: true }).click();
+  await page.locator(`[data-action="open-date"][data-date="${dates.monday}"]`).click();
+  await expect(page.locator(".exempt-habit", { hasText: "No alcohol" })).toContainText("Allowed day · Holiday");
+  await page.getByRole("button", { name: "Previous day", exact: true }).click();
+  await expect(page.locator(".resting-panel")).toContainText("No alcohol");
+  await page.getByRole("button", { name: "Previous day", exact: true }).click();
+  await expect(page.locator(".habit-check", { hasText: "No alcohol" })).toContainText("Added to this day · Holiday");
+  await page.reload();
+  await expect(page.locator(".habit-check", { hasText: "No alcohol" })).toContainText("Added to this day · Holiday");
+});
+
 test("logs a habit immediately and preserves it after reload", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Scheduled today" })).toBeVisible();
