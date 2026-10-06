@@ -246,7 +246,8 @@ export class CloudSyncController {
     if (!this.hasHydrated || remoteIsNewer) {
       this.applyingRemote = true;
       try {
-        this.store.importState(data.state);
+        // View/date selections belong to this device, not the last device to sync.
+        this.store.importState(data.state, { preserveNavigation: true });
       } finally {
         this.applyingRemote = false;
       }

@@ -14,7 +14,7 @@ function worker() {
     clients: { claim: vi.fn(), matchAll: vi.fn().mockResolvedValue([]), openWindow },
     addEventListener: (name: string, handler: typeof handlers[string]) => { handlers[name] = handler; }, skipWaiting: vi.fn(),
   };
-  runInNewContext(readFileSync(new URL("../public/service-worker.js", import.meta.url), "utf8"), { self, URL, Promise, Number, caches: { keys: vi.fn().mockResolvedValue(["routine-command-shell-v8", "routine-command-shell-v9", "cash-command-shell-v1", "reef-command-assets"]), delete: deleteCache } });
+  runInNewContext(readFileSync(new URL("../public/service-worker.js", import.meta.url), "utf8"), { self, URL, Promise, Number, caches: { keys: vi.fn().mockResolvedValue(["routine-command-shell-v8", "routine-command-shell-v9", "routine-command-shell-v10", "cash-command-shell-v1", "reef-command-assets"]), delete: deleteCache } });
   const fire = async (name: string, details: Record<string, unknown>) => {
     let pending: Promise<unknown> = Promise.resolve();
     handlers[name]!({ ...details, waitUntil: (promise: Promise<unknown>) => { pending = promise; } });
@@ -41,7 +41,7 @@ describe("Web Push service worker", () => {
   it("preserves caches owned by Cash Command and Reef Command", async () => {
     const service = worker();
     await service.fire("activate", {});
-    expect(service.deleteCache.mock.calls).toEqual([["routine-command-shell-v8"]]);
+    expect(service.deleteCache.mock.calls).toEqual([["routine-command-shell-v8"], ["routine-command-shell-v9"]]);
   });
 
   it("opens only Routine Command when a notification URL points outside its scope", async () => {

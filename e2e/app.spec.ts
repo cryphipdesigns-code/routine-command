@@ -17,12 +17,12 @@ test("retains notification preferences, shows quote sources, and fits the phone"
   await page.goto("/");
   await page.locator('[data-view="settings"]:visible').first().click();
   await expect(page.getByRole("heading", { name: "Command notifications" })).toBeVisible();
-  await page.getByLabel("Evening reminder time").fill("19:45");
-  await page.getByLabel("Evening reminder time").blur();
+  await page.getByLabel("Evening reminder time", { exact: true }).fill("19:45");
+  await page.getByLabel("Evening reminder time", { exact: true }).blur();
   await page.locator('[data-notification-setting="tone"]').selectOption("direct");
   await page.locator('[data-notification-setting="showHabitNames"]').uncheck();
   await page.reload();
-  await expect(page.getByLabel("Evening reminder time")).toHaveValue("19:45");
+  await expect(page.getByLabel("Evening reminder time", { exact: true })).toHaveValue("19:45");
   await expect(page.locator('[data-notification-setting="tone"]')).toHaveValue("direct");
   await expect(page.locator('[data-notification-setting="showHabitNames"]')).not.toBeChecked();
   await page.locator(".quote-sources summary").click();
@@ -271,15 +271,15 @@ test("keeps 15 min Read as yes/no and retains daily signals", async ({ page }) =
   await page.locator('[data-view="today"]:visible').first().click();
   await expect(page.getByRole("button", { name: "Complete 15 min Read", exact: true })).toBeVisible();
 
-  await page.getByLabel("Wake time").fill("06:30");
-  await page.getByLabel("Wake time").dispatchEvent("change");
-  await page.getByLabel("Bedtime").fill("22:45");
-  await page.getByLabel("Bedtime").dispatchEvent("change");
+  await page.getByLabel("Wake time", { exact: true }).fill("06:30");
+  await page.getByLabel("Wake time", { exact: true }).dispatchEvent("change");
+  await page.getByLabel("Bedtime", { exact: true }).fill("22:45");
+  await page.getByLabel("Bedtime", { exact: true }).dispatchEvent("change");
   await page.getByLabel("Calories consumed").fill("2050");
   await page.getByLabel("Calories consumed").dispatchEvent("change");
   await page.reload();
-  await expect(page.getByLabel("Wake time")).toHaveValue("06:30");
-  await expect(page.getByLabel("Bedtime")).toHaveValue("22:45");
+  await expect(page.getByLabel("Wake time", { exact: true })).toHaveValue("06:30");
+  await expect(page.getByLabel("Bedtime", { exact: true })).toHaveValue("22:45");
   await expect(page.getByLabel("Calories consumed")).toHaveValue("2050");
   await expect(page.locator('[data-habit-card-id="habit-calories"]')).toHaveCount(0);
 });
@@ -290,16 +290,16 @@ test("applies optional signal targets without changing habit progress", async ({
   await page.locator('[data-view="settings"]:visible').first().click();
   await page.getByLabel("Calories at or below").fill("2100");
   await page.getByLabel("Calories at or below").dispatchEvent("change");
-  await page.getByLabel("Wake by").fill("06:30");
-  await page.getByLabel("Wake by").dispatchEvent("change");
-  await page.getByLabel("Bed by").fill("22:30");
-  await page.getByLabel("Bed by").dispatchEvent("change");
+  await page.getByLabel("Wake by", { exact: true }).fill("06:30");
+  await page.getByLabel("Wake by", { exact: true }).dispatchEvent("change");
+  await page.getByLabel("Bed by", { exact: true }).fill("22:30");
+  await page.getByLabel("Bed by", { exact: true }).dispatchEvent("change");
 
   await page.locator('[data-view="today"]:visible').first().click();
-  await page.getByLabel("Wake time").fill("06:15");
-  await page.getByLabel("Wake time").dispatchEvent("change");
-  await page.getByLabel("Bedtime").fill("23:15");
-  await page.getByLabel("Bedtime").dispatchEvent("change");
+  await page.getByLabel("Wake time", { exact: true }).fill("06:15");
+  await page.getByLabel("Wake time", { exact: true }).dispatchEvent("change");
+  await page.getByLabel("Bedtime", { exact: true }).fill("23:15");
+  await page.getByLabel("Bedtime", { exact: true }).dispatchEvent("change");
   await page.getByLabel("Calories consumed").fill("2000");
   await page.getByLabel("Calories consumed").dispatchEvent("change");
 
@@ -374,7 +374,7 @@ test("keeps the exercise time control inside its mobile column", async ({ page }
   await exercise.getByText("Workout details").click();
   const bounds = await exercise.locator('input[data-exercise-detail="timeOfDay"]').evaluate((input) => {
     const inputBox = input.getBoundingClientRect();
-    const fieldBox = input.closest("label")!.getBoundingClientRect();
+    const fieldBox = input.closest(".field")!.getBoundingClientRect();
     const cardBox = input.closest("article")!.getBoundingClientRect();
     return {
       inputLeft: inputBox.left,

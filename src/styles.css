@@ -1272,6 +1272,12 @@ h3 {
 .modal-card > header > div { display: grid; gap: 4px; }
 .modal-card form { display: grid; gap: 20px; padding: 22px 24px 24px; }
 .field { display: grid; gap: 7px; }
+.time-control-field { min-width: 0; }
+.time-field-heading { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
+.time-field-heading > label { color: var(--muted); font-size: 0.68rem; font-weight: 700; }
+.time-reset-button { flex: 0 0 auto; min-height: 32px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; color: var(--muted); font-size: 0.64rem; font-weight: 700; background: var(--panel-muted); }
+.time-reset-button:hover, .time-reset-button:focus-visible { color: var(--accent-deep); border-color: var(--accent); background: var(--accent-soft); }
+.time-control-field input[type="time"] { display: block; width: 100%; min-width: 0; max-width: 100%; }
 .field > span, .field > label,
 .form-group legend { color: var(--ink); font-size: 0.74rem; font-weight: 750; }
 .field input,

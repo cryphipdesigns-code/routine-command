@@ -31,7 +31,7 @@ export class TrackerStore {
 
   async initialize(): Promise<void> {
     const saved = await this.repository.load();
-    this.state = normalizeState(saved ?? defaultState());
+    this.state = advanceCalendar(normalizeState(saved ?? defaultState()), todayKey(), true);
     await this.repository.save(this.state);
   }
 
@@ -48,8 +48,20 @@ export class TrackerStore {
     this.update({ ...this.state, activeView });
   }
 
+  openToday(): void {
+    const date = todayKey();
+    this.update({ ...advanceCalendar(this.state, date), activeView: "today", selectedDate: date });
+  }
+
   setSelectedDate(selectedDate: string): void {
     this.update({ ...this.state, selectedDate });
+  }
+
+  refreshCalendarDay(): boolean {
+    const next = advanceCalendar(this.state, todayKey());
+    if (next === this.state) return false;
+    this.update(next);
+    return true;
   }
 
   setReviewAnchor(reviewAnchor: string): void {
@@ -397,11 +409,19 @@ export class TrackerStore {
     this.emit();
   }
 
-  importState(input: unknown): boolean {
+  importState(input: unknown, options: { preserveNavigation?: boolean } = {}): boolean {
     if (!input || typeof input !== "object") return false;
     const candidate = input as Partial<AppState>;
     if (!Array.isArray(candidate.habits) || !Array.isArray(candidate.rules)) return false;
-    this.update(normalizeState(candidate as AppState));
+    const normalized = normalizeState(candidate as AppState);
+    this.update(options.preserveNavigation ? {
+      ...normalized,
+      activeView: this.state.activeView,
+      calendarDate: this.state.calendarDate,
+      selectedDate: this.state.selectedDate,
+      reviewAnchor: this.state.reviewAnchor,
+      reviewMode: this.state.reviewMode,
+    } : advanceCalendar(normalized, todayKey(), true));
     return true;
   }
 
@@ -444,6 +464,16 @@ export class TrackerStore {
   private emit(): void {
     this.listeners.forEach((listener) => listener(this.state));
   }
+}
+
+function advanceCalendar(state: AppState, currentDate: string, resetSelection = false): AppState {
+  if (state.calendarDate === currentDate) return state;
+  return {
+    ...state,
+    calendarDate: currentDate,
+    selectedDate: resetSelection || state.selectedDate === state.calendarDate ? currentDate : state.selectedDate,
+    reviewAnchor: state.reviewAnchor === state.calendarDate ? currentDate : state.reviewAnchor,
+  };
 }
 
 function ruleFromDraft(
@@ -546,6 +576,8 @@ function normalizeState(state: AppState): AppState {
     ...state,
     schemaVersion: 6,
     activeView: activeViews.includes(state.activeView) ? state.activeView : "today",
+    // Older snapshots did not distinguish a saved selection from the current day.
+    calendarDate: state.calendarDate || state.selectedDate || todayKey(),
     selectedDate: state.selectedDate || todayKey(),
     reviewAnchor: state.reviewAnchor || todayKey(),
     habits,

@@ -111,6 +111,7 @@ export function defaultState(): AppState {
   return {
     schemaVersion: 6,
     activeView: "today",
+    calendarDate: today,
     selectedDate: today,
     reviewAnchor: today,
     reviewMode: "week",

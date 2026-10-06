@@ -109,6 +109,7 @@ export interface NotificationSettings {
 export interface AppState {
   schemaVersion: 6;
   activeView: ViewId;
+  calendarDate: string;
   selectedDate: string;
   reviewAnchor: string;
   reviewMode: ReviewMode;

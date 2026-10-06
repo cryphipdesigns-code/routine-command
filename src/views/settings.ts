@@ -3,6 +3,7 @@ import type { CloudSyncSnapshot } from "../data/cloud-sync";
 import { escapeHtml, icon } from "../ui";
 import { pageIntro } from "./shared";
 import { renderNotificationSettings } from "./notifications";
+import { renderTimeField } from "./time-fields";
 
 export function renderSettings(state: AppState, sync: CloudSyncSnapshot): string {
   return `
@@ -31,8 +32,8 @@ export function renderSettings(state: AppState, sync: CloudSyncSnapshot): string
           <p class="settings-note">Targets add context to trends. Missing or outside-range data never lowers habit adherence.</p>
           <div class="signal-target-grid">
             <label class="field"><span>Calories at or below</span><input type="number" inputmode="numeric" min="0" step="1" data-signal-target="caloriesMax" value="${state.settings.signalTargets.caloriesMax ?? ""}" placeholder="No target" /></label>
-            <label class="field"><span>Wake by</span><input type="time" data-signal-target="wakeTimeLatest" value="${escapeHtml(state.settings.signalTargets.wakeTimeLatest ?? "")}" /></label>
-            <label class="field"><span>Bed by</span><input type="time" data-signal-target="bedTimeLatest" value="${escapeHtml(state.settings.signalTargets.bedTimeLatest ?? "")}" /></label>
+            ${renderTimeField({ id: "target-wake", label: "Wake by", value: state.settings.signalTargets.wakeTimeLatest, attributes: 'data-signal-target="wakeTimeLatest"' })}
+            ${renderTimeField({ id: "target-bed", label: "Bed by", value: state.settings.signalTargets.bedTimeLatest, attributes: 'data-signal-target="bedTimeLatest"' })}
           </div>
         </div>
 

@@ -5,6 +5,7 @@ import { momentumSummary } from "../domain/momentum";
 import { formatSignalTime, isTimeAtOrBefore } from "../domain/signals";
 import { escapeHtml, formatPercent, icon } from "../ui";
 import { activeHabits, emptyState, pageIntro, statusText } from "./shared";
+import { renderTimeField, renderTimeReset } from "./time-fields";
 
 export function renderToday(state: AppState): string {
   const habits = activeHabits(state);
@@ -201,7 +202,7 @@ function renderHabitCheck(state: AppState, habit: Habit, status: string): string
               <span>${escapeHtml(rule.unit)}</span>
             </label>`
       }
-      ${supportsExerciseDetails ? renderExerciseDetails(habit, exerciseDetails, disabled) : ""}
+      ${supportsExerciseDetails ? renderExerciseDetails(habit, exerciseDetails, disabled, state.selectedDate) : ""}
     </article>
   `;
 }
@@ -253,6 +254,7 @@ function renderExerciseDetails(
   habit: Habit,
   details: ExerciseDetails | null,
   disabled: boolean,
+  localDate: string,
 ): string {
   const types = ["", "Strength", "Run", "Walk", "Cycle", "HIIT", "Sports", "Mobility", "Other"];
   const summary = [
@@ -282,7 +284,7 @@ function renderExerciseDetails(
         </select></label>
         <label class="field"><span>Duration</span><span class="exercise-number"><input type="number" inputmode="numeric" min="0" step="1" value="${details?.durationMinutes ?? ""}" placeholder="0" ${field("durationMinutes")} /><small>min</small></span></label>
         <label class="field"><span>Calories burned</span><span class="exercise-number"><input type="number" inputmode="numeric" min="0" step="1" value="${details?.caloriesBurned ?? ""}" placeholder="0" ${field("caloriesBurned")} /><small>kcal</small></span></label>
-        <label class="field"><span>Time of day</span><input type="time" value="${escapeHtml(details?.timeOfDay ?? "")}" ${field("timeOfDay")} /></label>
+        ${renderTimeField({ id: `exercise-time-${habit.id}`, label: "Time of day", value: details?.timeOfDay ?? null, attributes: `${field("timeOfDay")} data-time-date="${escapeHtml(localDate)}"` })}
       </div>
     </details>
   `;
@@ -307,6 +309,7 @@ function renderSignals(state: AppState): string {
           checkin?.wakeTime ?? null,
           targets.wakeTimeLatest,
           false,
+          state.selectedDate,
         )}
         ${renderTimeSignal(
           "bedTime",
@@ -316,6 +319,7 @@ function renderSignals(state: AppState): string {
           checkin?.bedTime ?? null,
           targets.bedTimeLatest,
           true,
+          state.selectedDate,
         )}
         ${renderCaloriesSignal(checkin?.calories ?? null, targets.caloriesMax)}
       </div>
@@ -340,6 +344,7 @@ function renderTimeSignal(
   value: string | null,
   target: string | null,
   bedtime: boolean,
+  localDate: string,
 ): string {
   const status = !value
     ? { tone: "empty", label: "Not recorded" }
@@ -348,11 +353,11 @@ function renderTimeSignal(
       : isTimeAtOrBefore(value, target, bedtime)
         ? { tone: "in-range", label: "In range" }
         : { tone: "outside", label: "Outside target" };
-  return `<label class="signal-entry-card">
-    <span class="signal-entry-heading"><i class="time-icon ${field === "wakeTime" ? "wake" : "bed"}">${icon(iconName, 18)}</i><span><strong>${escapeHtml(label)}</strong><small>${escapeHtml(context)}</small></span></span>
-    <input type="time" data-checkin-time="${field}" value="${escapeHtml(value ?? "")}" aria-label="${escapeHtml(label)}" />
+  return `<div class="signal-entry-card time-control-field">
+    <div class="time-field-heading"><span class="signal-entry-heading"><i class="time-icon ${field === "wakeTime" ? "wake" : "bed"}">${icon(iconName, 18)}</i><span><strong>${escapeHtml(label)}</strong><small>${escapeHtml(context)}</small></span></span>${renderTimeReset(label)}</div>
+    <input type="time" data-checkin-time="${field}" data-time-date="${escapeHtml(localDate)}" value="${escapeHtml(value ?? "")}" aria-label="${escapeHtml(label)}" />
     <span class="signal-entry-meta"><em class="signal-reading-status ${status.tone}">${status.label}</em><small>${target ? `Target by ${escapeHtml(formatSignalTime(target))}` : "No target"}</small></span>
-  </label>`;
+  </div>`;
 }
 
 function renderCaloriesSignal(value: number | null, target: number | null): string {

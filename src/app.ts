@@ -3,7 +3,8 @@ import { CloudSyncController, type CloudSyncSnapshot } from "./data/cloud-sync";
 import { currentPushSubscription, enablePushNotifications, pushSupportMessage, removeDevicePush, sendTestPush } from "./data/push-notifications";
 import { evaluateHabitDay, ruleForDate } from "./domain/compliance";
 import { addDays, dayName, formatShortDate, parseDateKey, toDateKey, todayKey } from "./domain/dates";
-import { buildAccountabilityNotice, type AccountabilityNotice } from "./domain/notifications";
+import { buildAccountabilityNotice, defaultNotifications, type AccountabilityNotice } from "./domain/notifications";
+import { isTimeAtOrBefore } from "./domain/signals";
 import {
   isDaySecured,
   isRecoveryCompletion,
@@ -87,6 +88,9 @@ export class TrackerApp {
   private isRefreshing = false;
   private pushBusy = false;
   private pushDeviceMessage = "Checking this device…";
+  private renderPending = false;
+  private pointerInProgress = false;
+  private calendarTimer: number | null = null;
 
   constructor(
     private readonly root: HTMLElement,
@@ -95,21 +99,51 @@ export class TrackerApp {
   ) {}
 
   start(): void {
+    this.store.refreshCalendarDay();
     this.openNotificationDate();
     this.store.subscribe(() => {
       this.render();
       void this.updateAppBadge();
     });
     this.cloudSync.subscribe((snapshot) => this.updateCloudSync(snapshot));
-    this.root.addEventListener("click", (event) => this.handleClick(event));
+    this.root.addEventListener("click", (event) => {
+      const active = document.activeElement;
+      // Safari buttons need not take focus. Finish the time edit when another
+      // part of the app is tapped, without closing clicks inside its own field.
+      if (active instanceof HTMLInputElement && active.type === "time" && event.target instanceof Node && !active.closest(".time-control-field")?.contains(event.target)) active.blur();
+      this.handleClick(event);
+      this.flushDeferredRender(true);
+    });
+    this.root.addEventListener("pointerdown", () => { this.pointerInProgress = true; });
+    const finishPointer = () => {
+      this.pointerInProgress = false;
+      // Let the subsequent click use its original target before rebuilding.
+      window.setTimeout(() => this.flushDeferredRender(), 0);
+    };
+    window.addEventListener("pointerup", finishPointer);
+    window.addEventListener("pointercancel", finishPointer);
+    this.root.addEventListener("input", (event) => {
+      if (event.target instanceof HTMLInputElement && event.target.type === "time") this.saveTimeInput(event.target);
+    });
+    this.root.addEventListener("focusout", (event) => {
+      if (event.target instanceof HTMLInputElement && event.target.type === "time") {
+        this.saveTimeInput(event.target);
+        queueMicrotask(() => this.flushDeferredRender());
+      }
+    });
     this.root.addEventListener("change", (event) => this.handleChange(event));
     this.root.addEventListener("submit", (event) => this.handleSubmit(event));
     this.root.addEventListener("keydown", (event) => {
       if (event.key === "Escape") this.closeModal();
+      if (event.key === "Enter" && event.target instanceof HTMLInputElement && event.target.type === "time") event.target.blur();
     });
     window.addEventListener("online", () => this.updateOnlineStatus());
     window.addEventListener("offline", () => this.updateOnlineStatus());
-    window.addEventListener("focus", () => void this.updateAppBadge());
+    window.addEventListener("focus", () => this.refreshCalendar());
+    window.addEventListener("pageshow", () => this.refreshCalendar());
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") this.refreshCalendar();
+    });
     window.addEventListener("touchstart", (event) => this.handlePullStart(event), { passive: true });
     window.addEventListener("touchmove", (event) => this.handlePullMove(event), { passive: true });
     window.addEventListener("touchend", () => this.handlePullEnd(), { passive: true });
@@ -117,9 +151,17 @@ export class TrackerApp {
     this.render();
     void this.updateAppBadge();
     void this.updatePushDeviceStatus();
+    this.refreshCalendar();
   }
 
   private render(): void {
+    // Native mobile time pickers emit changes for individual wheel/segment edits.
+    // Keep the actual input connected until editing finishes, even during sync.
+    if (this.editingTime() || this.pointerInProgress) {
+      this.renderPending = true;
+      return;
+    }
+    this.renderPending = false;
     const openExerciseDetails = new Set(
       Array.from(this.root.querySelectorAll<HTMLDetailsElement>("[data-exercise-details][open]"))
         .map((details) => details.dataset.exerciseDetails)
@@ -138,13 +180,39 @@ export class TrackerApp {
     if (this.exceptionContext) this.showExceptionModal();
   }
 
+  private editingTime(): boolean {
+    const active = document.activeElement;
+    return active instanceof HTMLInputElement && active.type === "time" && this.root.contains(active);
+  }
+
+  private flushDeferredRender(afterClick = false): void {
+    const active = document.activeElement;
+    // A Tab or tap into another field must not lose that new field's focus.
+    const editingField = this.root.contains(active) && (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || active instanceof HTMLSelectElement);
+    const focusedButton = this.root.contains(active) && active instanceof HTMLButtonElement;
+    if (this.renderPending && !editingField && !this.pointerInProgress && (!focusedButton || afterClick)) this.render();
+  }
+
+  private refreshCalendar(): void {
+    this.store.refreshCalendarDay();
+    void this.updateAppBadge();
+    if (this.calendarTimer !== null) window.clearTimeout(this.calendarTimer);
+    const midnight = new Date();
+    midnight.setHours(24, 0, 0, 0);
+    this.calendarTimer = window.setTimeout(() => this.refreshCalendar(), Math.max(1000, midnight.getTime() - Date.now() + 50));
+  }
+
   private handleClick(event: Event): void {
     const target = event.target as HTMLElement;
     const viewButton = target.closest<HTMLElement>("[data-view]");
     if (viewButton?.dataset.view) {
       this.modalHabitId = null;
       this.exceptionContext = null;
-      this.store.setActiveView(viewButton.dataset.view as AppState["activeView"]);
+      if (viewButton.dataset.view === "today") this.store.openToday();
+      else {
+        this.store.refreshCalendarDay();
+        this.store.setActiveView(viewButton.dataset.view as AppState["activeView"]);
+      }
       window.scrollTo({ top: 0, behavior: "auto" });
       return;
     }
@@ -154,6 +222,15 @@ export class TrackerApp {
     const action = button.dataset.action;
 
     switch (action) {
+      case "reset-time": {
+        const input = button.closest(".time-control-field")?.querySelector<HTMLInputElement>('input[type="time"]');
+        if (input && !input.disabled) {
+          input.value = button.dataset.timeDefault ?? "";
+          this.saveTimeInput(input);
+          input.blur();
+        }
+        break;
+      }
       case "shift-selected-date":
         this.store.setSelectedDate(addDays(this.store.snapshot.selectedDate, Number(button.dataset.amount)));
         break;
@@ -405,6 +482,10 @@ export class TrackerApp {
 
   private handleChange(event: Event): void {
     const input = event.target as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+    if (input instanceof HTMLInputElement && input.type === "time") {
+      this.saveTimeInput(input);
+      return;
+    }
     if (input.matches("[data-notification-setting]")) {
       const key = input.getAttribute("data-notification-setting") as keyof NotificationSettings;
       const current = this.store.snapshot.settings.notifications;
@@ -519,23 +600,46 @@ export class TrackerApp {
       }
       return;
     }
-    if (input.matches("[data-checkin-time]")) {
-      const field = input.getAttribute("data-checkin-time");
-      if (field === "wakeTime" || field === "bedTime") {
-        this.store.setCheckinTime(
-          this.store.snapshot.selectedDate,
-          field,
-          input.value || null,
-        );
-      }
-      return;
-    }
     if (input.id === "importFile" && input instanceof HTMLInputElement) {
       const file = input.files?.[0];
       if (file) void this.importData(file);
       return;
     }
     if (input.name === "inputType") this.syncHabitFormType(input.value as InputType);
+  }
+
+  private saveTimeInput(input: HTMLInputElement): void {
+    // Empty with badInput means a partially typed time, not an intentional clear.
+    if (input.validity.badInput || (input.value && !/^([01]\d|2[0-3]):[0-5]\d$/.test(input.value))) return;
+    const state = this.store.snapshot;
+    const value = input.value || null;
+    // A picker opened before midnight still belongs to the day it was opened on.
+    const localDate = input.dataset.timeDate ?? state.selectedDate;
+    const checkinField = input.dataset.checkinTime;
+    if (checkinField === "wakeTime" || checkinField === "bedTime") {
+      const current = state.checkins.find((item) => item.localDate === localDate)?.[checkinField] ?? null;
+      if (current !== value) this.store.setCheckinTime(localDate, checkinField, value);
+      // Update the status only; the input and its native picker remain intact.
+      const reading = input.closest(".signal-entry-card")?.querySelector<HTMLElement>(".signal-reading-status");
+      const target = checkinField === "wakeTime" ? state.settings.signalTargets.wakeTimeLatest : state.settings.signalTargets.bedTimeLatest;
+      const [tone, label] = !value ? ["empty", "Not recorded"] : !target ? ["recorded", "Recorded"] :
+        isTimeAtOrBefore(value, target, checkinField === "bedTime") ? ["in-range", "In range"] : ["outside", "Outside target"];
+      if (reading) { reading.className = `signal-reading-status ${tone}`; reading.textContent = label!; }
+    } else if (input.dataset.exerciseDetail === "timeOfDay" && input.dataset.habitId) {
+      const habitId = input.dataset.habitId;
+      const current = state.logs.find((item) => item.habitId === habitId && item.localDate === localDate)?.exerciseDetails?.timeOfDay ?? null;
+      if (current !== value) this.store.setExerciseDetail(habitId, localDate, "timeOfDay", value);
+    } else if (input.dataset.signalTarget === "wakeTimeLatest" || input.dataset.signalTarget === "bedTimeLatest") {
+      const field = input.dataset.signalTarget;
+      const current = state.settings.signalTargets;
+      if (current[field] !== value) this.store.updateSettings({ signalTargets: { ...current, [field]: value } });
+    } else if (["eveningTime", "trendTime", "quietStart", "quietEnd"].includes(input.dataset.notificationSetting ?? "")) {
+      const field = input.dataset.notificationSetting as "eveningTime" | "trendTime" | "quietStart" | "quietEnd";
+      const next = value ?? defaultNotifications[field];
+      if (!value) input.value = next;
+      const current = state.settings.notifications;
+      if (current[field] !== next) this.store.updateSettings({ notifications: { ...current, [field]: next } });
+    }
   }
 
   private handleSubmit(event: SubmitEvent): void {

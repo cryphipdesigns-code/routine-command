@@ -24,6 +24,108 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+describe("calendar lifecycle", () => {
+  it("opens the current day after an overnight restart without moving earlier entries", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 5, 12));
+    const repository = new MemoryRepository();
+    const monday = new TrackerStore(repository);
+    await monday.initialize();
+    monday.setBooleanLog("habit-read", "2026-10-05", true);
+    monday.setCheckinTime("2026-10-05", "wakeTime", "06:30");
+    repository.state = structuredClone(monday.snapshot);
+
+    vi.setSystemTime(new Date(2026, 9, 6, 8));
+    const tuesday = new TrackerStore(repository);
+    await tuesday.initialize();
+    expect(tuesday.snapshot.selectedDate).toBe("2026-10-06");
+    expect(tuesday.snapshot.calendarDate).toBe("2026-10-06");
+    expect(tuesday.snapshot.logs[0]?.localDate).toBe("2026-10-05");
+    expect(tuesday.snapshot.checkins[0]).toMatchObject({ localDate: "2026-10-05", wakeTime: "06:30" });
+  });
+
+  it("preserves an intentional historical selection on same-day reloads", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 6, 12));
+    const repository = new MemoryRepository();
+    const store = new TrackerStore(repository);
+    await store.initialize();
+    store.setSelectedDate("2026-10-04");
+    repository.state = structuredClone(store.snapshot);
+    const reloaded = new TrackerStore(repository);
+    await reloaded.initialize();
+    expect(reloaded.snapshot.selectedDate).toBe("2026-10-04");
+    expect(reloaded.snapshot.calendarDate).toBe("2026-10-06");
+  });
+
+  it("rolls following-Today selections forward once without hijacking historical browsing", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 5, 23, 59));
+    const store = new TrackerStore(new MemoryRepository());
+    await store.initialize();
+    vi.setSystemTime(new Date(2026, 9, 6, 0, 1));
+    expect(store.refreshCalendarDay()).toBe(true);
+    expect(store.snapshot.selectedDate).toBe("2026-10-06");
+    expect(store.snapshot.reviewAnchor).toBe("2026-10-06");
+    expect(store.refreshCalendarDay()).toBe(false);
+
+    store.setSelectedDate("2026-10-02");
+    store.setReviewAnchor("2026-09-01");
+    vi.setSystemTime(new Date(2026, 9, 7, 8));
+    store.refreshCalendarDay();
+    expect(store.snapshot.selectedDate).toBe("2026-10-02");
+    expect(store.snapshot.reviewAnchor).toBe("2026-09-01");
+    expect(store.snapshot.calendarDate).toBe("2026-10-07");
+  });
+
+  it("syncs records without restoring another device's view or stale date", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 6, 8));
+    const store = new TrackerStore(new MemoryRepository());
+    await store.initialize();
+    store.setActiveView("settings");
+    const remote = structuredClone(store.snapshot);
+    remote.activeView = "today";
+    remote.selectedDate = "2026-10-05";
+    remote.calendarDate = "2026-10-05";
+    remote.reviewAnchor = "2026-09-01";
+    remote.reviewMode = "month";
+    remote.habits[0]!.name = "Updated on another device";
+    expect(store.importState(remote, { preserveNavigation: true })).toBe(true);
+    expect(store.snapshot.habits[0]!.name).toBe("Updated on another device");
+    expect(store.snapshot.activeView).toBe("settings");
+    expect(store.snapshot.selectedDate).toBe("2026-10-06");
+    expect(store.snapshot.calendarDate).toBe("2026-10-06");
+    expect(store.snapshot.reviewAnchor).toBe("2026-10-06");
+    expect(store.snapshot.reviewMode).toBe("week");
+  });
+
+  it("upgrades a pre-fix snapshot that was stuck on the previous day", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 5, 12));
+    const repository = new MemoryRepository();
+    const old = new TrackerStore(repository).snapshot;
+    delete (old as Partial<AppState>).calendarDate;
+    repository.state = old;
+    vi.setSystemTime(new Date(2026, 9, 6, 8));
+    const store = new TrackerStore(repository);
+    await store.initialize();
+    expect(store.snapshot.selectedDate).toBe("2026-10-06");
+  });
+
+  it("clears only the requested daily time, retaining the other signals", async () => {
+    const store = new TrackerStore(new MemoryRepository());
+    await store.initialize();
+    const date = store.snapshot.selectedDate;
+    store.setCheckinMetric(date, "mood", 4);
+    store.setCheckinCalories(date, 2100);
+    store.setCheckinTime(date, "wakeTime", "06:30");
+    store.setCheckinTime(date, "bedTime", "22:45");
+    store.setCheckinTime(date, "wakeTime", null);
+    expect(store.snapshot.checkins[0]).toMatchObject({ wakeTime: null, bedTime: "22:45", mood: 4, calories: 2100 });
+  });
+});
+
 describe("habit lifecycle", () => {
   it("swaps allowance dates atomically, preserves logs, and restores the normal plan", async () => {
     vi.useFakeTimers();
