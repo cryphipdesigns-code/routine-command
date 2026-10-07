@@ -2,7 +2,7 @@ import type { AppState, ExerciseDetails, Habit } from "../types";
 import { evaluateHabitDay, ruleForDate, targetLabel } from "../domain/compliance";
 import { formatDayHeading, isFuture, isToday, parseDateKey } from "../domain/dates";
 import { momentumSummary } from "../domain/momentum";
-import { formatSignalTime, isTimeAtOrBefore } from "../domain/signals";
+import { formatSignalTime, timeSignalStatus } from "../domain/signals";
 import { escapeHtml, formatPercent, icon } from "../ui";
 import { activeHabits, emptyState, pageIntro, statusText } from "./shared";
 import { renderTimeField, renderTimeReset } from "./time-fields";
@@ -311,7 +311,6 @@ function renderSignals(state: AppState): string {
           "sun",
           checkin?.wakeTime ?? null,
           targets.wakeTimeLatest,
-          false,
           state.selectedDate,
         )}
         ${renderTimeSignal(
@@ -321,7 +320,6 @@ function renderSignals(state: AppState): string {
           "moon",
           checkin?.bedTime ?? null,
           targets.bedTimeLatest,
-          true,
           state.selectedDate,
         )}
         ${renderCaloriesSignal(checkin?.calories ?? null, targets.caloriesMax)}
@@ -346,16 +344,9 @@ function renderTimeSignal(
   iconName: string,
   value: string | null,
   target: string | null,
-  bedtime: boolean,
   localDate: string,
 ): string {
-  const status = !value
-    ? { tone: "empty", label: "Not recorded" }
-    : !target
-      ? { tone: "recorded", label: "Recorded" }
-      : isTimeAtOrBefore(value, target, bedtime)
-        ? { tone: "in-range", label: "In range" }
-        : { tone: "outside", label: "Outside target" };
+  const status = timeSignalStatus(field, value, target);
   return `<div class="signal-entry-card time-control-field">
     <div class="time-field-heading"><span class="signal-entry-heading"><i class="time-icon ${field === "wakeTime" ? "wake" : "bed"}">${icon(iconName, 18)}</i><span><strong>${escapeHtml(label)}</strong><small>${escapeHtml(context)}</small></span></span>${renderTimeReset(label)}</div>
     <input type="time" data-checkin-time="${field}" data-time-date="${escapeHtml(localDate)}" value="${escapeHtml(value ?? "")}" aria-label="${escapeHtml(label)}" />

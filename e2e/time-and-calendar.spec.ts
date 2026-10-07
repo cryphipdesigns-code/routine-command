@@ -2,6 +2,52 @@ import { expect, test } from "@playwright/test";
 
 test.use({ timezoneId: "America/Los_Angeles" });
 
+test("evaluates bedtime targets across midnight in live edits, reloads, and weekly review", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-10-07T19:00:00Z"));
+  await page.goto("/");
+  const progressBefore = await page.locator(".progress-ring span").textContent();
+  await page.locator('[data-view="settings"]:visible').first().click();
+  await page.getByLabel("Bed by", { exact: true }).fill("21:00");
+  await expect(page.locator(".signal-target-settings")).toContainText("Bedtime targets cross midnight");
+  await page.locator('[data-view="today"]:visible').first().click();
+  const bed = page.getByLabel("Bedtime", { exact: true });
+  const status = page.locator('.signal-entry-card [data-checkin-time="bedTime"]').locator("..").locator(".signal-reading-status");
+  await bed.focus();
+  const original = await bed.elementHandle();
+  for (const [value, label] of [["21:00", "In range"], ["00:00", "Outside target"], ["01:00", "Outside target"]]) {
+    await bed.fill(value!);
+    await bed.dispatchEvent("change");
+    await expect(status).toHaveText(label!);
+    expect(await original!.evaluate(input => input.isConnected && document.activeElement === input)).toBe(true);
+  }
+  await page.reload();
+  await expect(bed).toHaveValue("01:00");
+  await expect(status).toHaveText("Outside target");
+  await expect(page.locator(".progress-ring span")).toHaveText(progressBefore ?? "");
+  await page.locator('[data-view="review"]:visible').first().click();
+  const summary = page.locator(".signal-summary-item", { hasText: "Bedtime" });
+  await expect(summary).toContainText("0/1 in range");
+
+  // A target itself after midnight is valid; the previous evening is earlier.
+  await page.locator('[data-view="settings"]:visible').first().click();
+  await page.getByLabel("Bed by", { exact: true }).fill("01:30");
+  await page.locator('[data-view="today"]:visible').first().click();
+  await expect(status).toHaveText("In range");
+  await page.getByRole("button", { name: "Previous day", exact: true }).click();
+  await bed.fill("23:30");
+  await expect(status).toHaveText("In range");
+  await page.locator('[data-view="review"]:visible').first().click();
+  await expect(summary).toContainText("2/2 in range");
+  await expect(summary.locator("strong")).toHaveText("12:15 AM");
+
+  await page.locator('[data-view="settings"]:visible').first().click();
+  await page.getByLabel("Bed by", { exact: true }).fill("00:30");
+  await page.locator('[data-view="review"]:visible').first().click();
+  await expect(summary).toContainText("1/2 in range");
+  await page.reload();
+  await expect(summary).toContainText("1/2 in range");
+});
+
 test("keeps time inputs connected and focused across incremental picker changes", async ({ page }) => {
   await page.goto("/");
   const wake = page.getByLabel("Wake time", { exact: true });

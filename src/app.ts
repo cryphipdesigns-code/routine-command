@@ -4,7 +4,7 @@ import { currentPushSubscription, enablePushNotifications, pushSupportMessage, r
 import { evaluateHabitDay, ruleForDate } from "./domain/compliance";
 import { addDays, dayName, formatShortDate, parseDateKey, toDateKey, todayKey } from "./domain/dates";
 import { buildAccountabilityNotice, defaultNotifications, type AccountabilityNotice } from "./domain/notifications";
-import { isTimeAtOrBefore } from "./domain/signals";
+import { timeSignalStatus } from "./domain/signals";
 import {
   isDaySecured,
   isRecoveryCompletion,
@@ -622,9 +622,8 @@ export class TrackerApp {
       // Update the status only; the input and its native picker remain intact.
       const reading = input.closest(".signal-entry-card")?.querySelector<HTMLElement>(".signal-reading-status");
       const target = checkinField === "wakeTime" ? state.settings.signalTargets.wakeTimeLatest : state.settings.signalTargets.bedTimeLatest;
-      const [tone, label] = !value ? ["empty", "Not recorded"] : !target ? ["recorded", "Recorded"] :
-        isTimeAtOrBefore(value, target, checkinField === "bedTime") ? ["in-range", "In range"] : ["outside", "Outside target"];
-      if (reading) { reading.className = `signal-reading-status ${tone}`; reading.textContent = label!; }
+      const status = timeSignalStatus(checkinField, value, target);
+      if (reading) { reading.className = `signal-reading-status ${status.tone}`; reading.textContent = status.label; }
     } else if (input.dataset.exerciseDetail === "timeOfDay" && input.dataset.habitId) {
       const habitId = input.dataset.habitId;
       const current = state.logs.find((item) => item.habitId === habitId && item.localDate === localDate)?.exerciseDetails?.timeOfDay ?? null;

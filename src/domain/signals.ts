@@ -1,3 +1,6 @@
+/** One overnight window: afternoon/evening, then midnight through the next morning. */
+const BEDTIME_DAY_BOUNDARY = 12 * 60;
+
 export function isTimeAtOrBefore(
   value: string,
   target: string,
@@ -30,6 +33,18 @@ function timeToMinutes(value: string, bedtime: boolean): number | null {
   const [hour, minute] = value.split(":").map(Number);
   if (hour === undefined || minute === undefined || hour > 23 || minute > 59) return null;
   let result = hour * 60 + minute;
-  if (bedtime && result < 12 * 60) result += 24 * 60;
+  if (bedtime && result < BEDTIME_DAY_BOUNDARY) result += 24 * 60;
   return result;
+}
+
+export function timeSignalStatus(
+  field: "wakeTime" | "bedTime",
+  value: string | null,
+  target: string | null,
+): { tone: "empty" | "recorded" | "in-range" | "outside"; label: string } {
+  if (!value) return { tone: "empty", label: "Not recorded" };
+  if (!target) return { tone: "recorded", label: "Recorded" };
+  return isTimeAtOrBefore(value, target, field === "bedTime")
+    ? { tone: "in-range", label: "In range" }
+    : { tone: "outside", label: "Outside target" };
 }

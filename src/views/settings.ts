@@ -35,6 +35,7 @@ export function renderSettings(state: AppState, sync: CloudSyncSnapshot): string
             ${renderTimeField({ id: "target-wake", label: "Wake by", value: state.settings.signalTargets.wakeTimeLatest, attributes: 'data-signal-target="wakeTimeLatest"' })}
             ${renderTimeField({ id: "target-bed", label: "Bed by", value: state.settings.signalTargets.bedTimeLatest, attributes: 'data-signal-target="bedTimeLatest"' })}
           </div>
+          <p class="settings-note">Bedtime targets cross midnight: 1 a.m. is later than a 9 p.m. target.</p>
         </div>
 
         <div class="section-block settings-card motivation-settings">

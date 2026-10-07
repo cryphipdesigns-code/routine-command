@@ -64,6 +64,7 @@ test("keeps every Settings time field aligned, usable, and inside narrow phone c
         labelRight: label.right, resetLeft: reset.left,
         headingBottom: Math.max(label.bottom, reset.bottom), top: rect.top,
         fontSize: style.fontSize, appearance: style.appearance, textAlign: style.textAlign,
+        display: style.display, alignItems: style.alignItems,
       };
     }));
     for (const layout of layouts) {
@@ -72,6 +73,8 @@ test("keeps every Settings time field aligned, usable, and inside narrow phone c
       expect(layout.fontSize).toBe("16px");
       expect(layout.appearance).toBe("none");
       expect(layout.textAlign).toBe("left");
+      expect(layout.display).toBe("flex");
+      expect(layout.alignItems).toBe("center");
       expect(layout.left).toBeGreaterThanOrEqual(layout.containerLeft);
       expect(layout.right).toBeLessThanOrEqual(layout.containerRight);
       expect(layout.labelRight).toBeLessThanOrEqual(layout.resetLeft);
