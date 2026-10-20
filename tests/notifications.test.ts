@@ -20,6 +20,27 @@ function log(localDate: string, value: boolean, updatedAt = "2026-10-06T03:20:00
 }
 
 describe("push accountability rules", () => {
+  it("excludes Avoid from push badge counts even when the push reports an Avoid slip", () => {
+    const data = state();
+    data.habits.push({ ...data.habits[0]!, id: "avoid", direction: "avoid" });
+    data.rules.push({ ...data.rules[0]!, id: "avoid-rule", habitId: "avoid", direction: "avoid" });
+    expect(buildAccountabilityNotice(data, "evening", "2026-10-05").remaining).toBe(1);
+    data.logs = [log("2026-10-05", true), { ...log("2026-10-05", false), id: "slip", habitId: "avoid" }];
+    expect(buildAccountabilityNotice(data, "slip", "2026-10-05", data.habits[1]).remaining).toBe(0);
+    expect(notificationCandidates(data, evening)[0]).toMatchObject({ kind: "slip", remaining: 0 });
+  });
+
+  it("uses today's Build action count when yesterday's quiet-hour slip is delivered in the morning", () => {
+    const data = state();
+    data.rules[0]!.direction = "avoid";
+    data.habits.push({ ...data.habits[0]!, id: "new-build", direction: "build" });
+    data.rules.push({ ...data.rules[0]!, id: "new-build-rule", habitId: "new-build", direction: "build", effectiveFrom: "2026-10-06" });
+    data.logs = [log("2026-10-05", false, "2026-10-06T05:30:00Z")];
+    const notices = notificationCandidates(data, new Date("2026-10-06T14:00:00Z"));
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({ kind: "slip", localDate: "2026-10-05", remaining: 1 });
+  });
+
   it("uses the user's local date across UTC midnight and DST boundaries", () => {
     expect(notificationClock(evening, "America/Los_Angeles")).toEqual({ localDate: "2026-10-05", minutes: 1230 });
     expect(notificationClock(new Date("2026-11-02T04:30:00Z"), "America/Los_Angeles")).toEqual({ localDate: "2026-11-01", minutes: 1230 });

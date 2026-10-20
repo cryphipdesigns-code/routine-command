@@ -15,6 +15,7 @@ import { TrackerStore } from "./state/store";
 import { escapeHtml, icon } from "./ui";
 import { renderCloudSync } from "./views/settings";
 import { exceptionScheduleText, renderExceptionModal } from "./views/exceptions";
+import { renderDayReceipt } from "./views/day-receipt";
 import { renderShell, renderSyncStatus } from "./views/shell";
 
 const HABIT_COLORS = [
@@ -91,6 +92,7 @@ export class TrackerApp {
   private renderPending = false;
   private pointerInProgress = false;
   private calendarTimer: number | null = null;
+  private renderedContext = "";
 
   constructor(
     private readonly root: HTMLElement,
@@ -134,6 +136,11 @@ export class TrackerApp {
     this.root.addEventListener("change", (event) => this.handleChange(event));
     this.root.addEventListener("submit", (event) => this.handleSubmit(event));
     this.root.addEventListener("keydown", (event) => {
+      if (this.root.querySelector(".day-secured-celebration")) {
+        if (event.key === "Escape") { event.preventDefault(); this.dismissDayReceipt(); }
+        if (event.key === "Tab") { event.preventDefault(); this.root.querySelector<HTMLButtonElement>('[data-action="dismiss-day-receipt"]')?.focus(); }
+        return;
+      }
       if (event.key === "Escape") this.closeModal();
       if (event.key === "Enter" && event.target instanceof HTMLInputElement && event.target.type === "time") event.target.blur();
     });
@@ -167,7 +174,17 @@ export class TrackerApp {
         .map((details) => details.dataset.exerciseDetails)
         .filter((id): id is string => Boolean(id)),
     );
+    // Pointer and time-input edits can defer a render until after an effect was
+    // shown. Keep its actual root so neither the effect nor its timer is lost.
+    const state = this.store.snapshot;
+    const context = `${state.activeView}:${state.selectedDate}`;
+    const effects = this.renderedContext === context
+      ? ["celebrationRoot", "toastRoot"].map(id => this.root.querySelector<HTMLElement>(`#${id}`)).filter((element): element is HTMLElement => Boolean(element))
+      : [];
     this.root.innerHTML = renderShell(this.store.snapshot, this.cloudSync.snapshot);
+    this.renderedContext = context;
+    effects.forEach(element => this.root.querySelector(`#${element.id}`)?.replaceWith(element));
+    this.syncDayReceipt();
     openExerciseDetails.forEach((habitId) => {
       const details = this.root.querySelector<HTMLDetailsElement>(
         `[data-exercise-details="${CSS.escape(habitId)}"]`,
@@ -222,6 +239,18 @@ export class TrackerApp {
     const action = button.dataset.action;
 
     switch (action) {
+      case "day-receipt":
+        if (isDaySecured(this.store.snapshot, this.store.snapshot.selectedDate)) this.showDayReceipt();
+        break;
+      case "dismiss-day-receipt":
+        this.dismissDayReceipt();
+        break;
+      case "review-avoid": {
+        const heading = this.root.querySelector<HTMLElement>("#avoidCheckinHeading");
+        heading?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+        heading?.focus({ preventScroll: true });
+        break;
+      }
       case "reset-time": {
         const input = button.closest(".time-control-field")?.querySelector<HTMLInputElement>('input[type="time"]');
         if (input && !input.disabled) {
@@ -412,7 +441,7 @@ export class TrackerApp {
       this.isRefreshing ||
       window.scrollY > 0 ||
       event.touches.length !== 1 ||
-      target?.closest(".modal-card, input, textarea, select")
+      target?.closest(".modal-card, .day-secured-celebration, .day-secured-backdrop, input, textarea, select")
     ) {
       this.pullStartY = null;
       return;
@@ -934,6 +963,7 @@ export class TrackerApp {
     wasDaySecured: boolean,
     beforeMomentum: ReturnType<typeof momentumSummary>,
   ): void {
+    this.flushDeferredRender(true);
     const card = this.root.querySelector<HTMLElement>(
       `[data-habit-card-id="${CSS.escape(habit.id)}"]`,
     );
@@ -951,11 +981,7 @@ export class TrackerApp {
 
     if (dayJustSecured) {
       const reward = rewardJustUnlocked ? ` Reward unlocked: ${this.store.snapshot.settings.personalReward}.` : "";
-      this.showCelebration(
-        rare ? "Perfect alignment" : "Day secured",
-        `${recovery ? "Recovery win. " : ""}Every required objective is complete.${reward}`,
-        rare,
-      );
+      this.showDayReceipt(`${recovery ? "Recovery win. " : ""}Every required box checked. You earned this finish.${reward}`, rare);
     } else if (rewardJustUnlocked) {
       this.showCelebration(
         "Reward unlocked",
@@ -973,6 +999,28 @@ export class TrackerApp {
     }
   }
 
+  private showDayReceipt(message = "", rare = false): void {
+    const root = this.root.querySelector<HTMLElement>("#celebrationRoot");
+    if (!root) return;
+    this.root.querySelector<HTMLElement>("#toastRoot")?.replaceChildren();
+    root.innerHTML = renderDayReceipt(this.store.snapshot, message, rare);
+    this.syncDayReceipt();
+  }
+
+  private syncDayReceipt(): void {
+    const root = this.root.querySelector<HTMLElement>("#celebrationRoot");
+    if (root?.querySelector(".day-secured-celebration") && !isDaySecured(this.store.snapshot, this.store.snapshot.selectedDate)) root.replaceChildren();
+    const open = Boolean(root?.querySelector(".day-secured-celebration"));
+    this.root.querySelectorAll<HTMLElement>(".app-main, .sidebar, .bottom-nav, #modalRoot, #toastRoot").forEach(element => { element.inert = open; });
+    if (open) queueMicrotask(() => this.root.querySelector<HTMLButtonElement>('[data-action="dismiss-day-receipt"]')?.focus({ preventScroll: true }));
+  }
+
+  private dismissDayReceipt(): void {
+    this.root.querySelector<HTMLElement>("#celebrationRoot")?.replaceChildren();
+    this.syncDayReceipt();
+    this.root.querySelector<HTMLElement>("#dayProgressTitle")?.focus({ preventScroll: true });
+  }
+
   private showCelebration(title: string, message: string, rare: boolean): void {
     const root = this.root.querySelector<HTMLElement>("#celebrationRoot");
     if (!root) return;
@@ -984,8 +1032,9 @@ export class TrackerApp {
         <span>${escapeHtml(message)}</span>
         <i class="spark spark-one"></i><i class="spark spark-two"></i><i class="spark spark-three"></i><i class="spark spark-four"></i>
       </div>`;
+    const celebration = root.firstElementChild;
     window.setTimeout(() => {
-      if (root.isConnected) root.innerHTML = "";
+      if (root.isConnected && root.firstElementChild === celebration) root.innerHTML = "";
     }, 2800);
   }
 

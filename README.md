@@ -24,6 +24,8 @@ storage, and source code completely separate from Cash Command and Reef Command.
 - Neutral day exemptions and allowance-day swaps
 - Opt-in Web Push: evening Build check-ins, logged slips/skips, and evidence-based pattern nudges
 - Configurable direct/relentless original challenges with short, sourced motivational quotes
+- Build-only action badges; separate Avoid confirmations at day's end
+- Persistent secured-day ring and an acknowledged completion receipt
 
 The app starts with editable daily yes/no habits for **15 min Read**,
 **15 min Read Bible**, **BOM**, and **Cold**, alongside the existing examples.
@@ -77,6 +79,11 @@ category toggles, exemptions, start dates, optional habits, and a four-per-devic
 daily cap apply. Delivery is deduplicated atomically in Postgres. Missing records
 are called unconfirmed; they are never presented as proof of a skipped action.
 Push permission and coaching preferences are opt-in; Daily Signals are excluded.
+Icon badge counts include only outstanding required Build actions, even on an
+Avoid-slip notification. Avoid habits still need an explicit successful check-in
+to secure the day. Optional habits and Daily Signals never block closure. The
+secured-day receipt is derived from saved entries, so it survives reload and sync
+without locking you out of correcting a log.
 
 First deployment uses the linked Routine Command project only:
 

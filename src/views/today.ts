@@ -2,6 +2,7 @@ import type { AppState, ExerciseDetails, Habit } from "../types";
 import { evaluateHabitDay, ruleForDate, targetLabel } from "../domain/compliance";
 import { formatDayHeading, isFuture, isToday, parseDateKey } from "../domain/dates";
 import { momentumSummary } from "../domain/momentum";
+import { dayProgress } from "../domain/day-progress";
 import { formatSignalTime, timeSignalStatus } from "../domain/signals";
 import { escapeHtml, formatPercent, icon } from "../ui";
 import { activeHabits, emptyState, pageIntro, statusText } from "./shared";
@@ -25,9 +26,17 @@ export function renderToday(state: AppState): string {
     (item) => item.habitId === habit.id && item.localDate === state.selectedDate && !item.applicable,
   ));
   const normalResting = resting.filter((item) => !exempt.includes(item));
-  const required = scheduled.filter((item) => !item.habit.optional);
-  const complete = required.filter((item) => item.evaluation.successful).length;
-  const progress = required.length ? complete / required.length : 0;
+  const day = dayProgress(state, state.selectedDate);
+  const progress = day.total ? day.completed / day.total : 0;
+  const secured = day.secured && !isFuture(state.selectedDate);
+  const progressTitle = secured ? "Day secured"
+    : !day.total ? "No required habits today"
+    : day.buildRemaining ? `${day.buildRemaining} Build ${day.buildRemaining === 1 ? "action" : "actions"} left`
+    : day.buildTotal ? "Actions complete" : "Protect your day";
+  const progressCopy = secured ? "Ring closed. Boxes checked. A day well done."
+    : day.avoidUnconfirmed ? `${day.avoidUnconfirmed} Avoid ${day.avoidUnconfirmed === 1 ? "habit to confirm" : "habits to confirm"} at day’s end. Not counted in your action badge.`
+    : day.avoidOffTarget ? "Avoid result recorded honestly. A slip is not a secured day; the next choice still counts."
+    : scheduled.length ? "Optional habits and Daily Signals never block a secured day." : "No habits are scheduled for this day.";
   const heading = isToday(state.selectedDate) ? "Today" : formatDayHeading(state.selectedDate);
 
   return `
@@ -49,14 +58,20 @@ export function renderToday(state: AppState): string {
         <button class="icon-button" data-action="shift-selected-date" data-amount="1" aria-label="Next day">${icon("chevronRight")}</button>
       </section>
 
-      <section class="daily-progress surface">
-        <div class="progress-ring" style="--progress: ${Math.round(progress * 360)}deg">
-          <div><strong>${complete}</strong><span>of ${required.length}</span></div>
+      <section class="daily-progress surface ${secured ? "is-secured" : ""}" aria-labelledby="dayProgressTitle">
+        <div class="progress-ring" style="--progress: ${Math.round(progress * 360)}deg" role="progressbar" aria-label="Required habits confirmed" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(progress * 100)}">
+          <div><strong>${day.completed}</strong><span>of ${day.total}</span></div>
         </div>
-        <div>
-          <p class="eyebrow">Daily progress</p>
-          <h2>${progress === 1 && required.length ? "Day secured" : required.length ? `${required.length - complete} left for this day` : "No required habits today"}</h2>
-          <p>${scheduled.length ? "Optional habits never lower your adherence." : "No habits are scheduled for this day."}</p>
+        <div class="daily-progress-copy">
+          <p class="eyebrow">${secured ? `${icon("shield", 14)} Command complete` : "Daily progress"}</p>
+          <h2 id="dayProgressTitle" tabindex="-1">${progressTitle}</h2>
+          <p class="day-progress-message">${progressCopy}</p>
+          <div class="day-progress-tallies">
+            ${day.buildTotal ? `<span class="${day.buildRemaining ? "" : "is-done"}">${icon(day.buildRemaining ? "plus" : "check", 14)} ${day.buildCompleted}/${day.buildTotal} Build done</span>` : ""}
+            ${day.avoidTotal ? `<span class="${day.avoidCompleted === day.avoidTotal ? "is-done" : ""}">${icon("shield", 14)} ${day.avoidCompleted}/${day.avoidTotal} Avoid held</span>` : ""}
+          </div>
+          ${secured ? `<button class="day-receipt-button" data-action="day-receipt">View day receipt ${icon("chevronRight", 15)}</button>`
+            : !day.buildRemaining && day.avoidUnconfirmed && !isFuture(state.selectedDate) ? `<button class="day-receipt-button" data-action="review-avoid">Review Avoid check-in ${icon("chevronRight", 15)}</button>` : ""}
         </div>
       </section>
 
@@ -107,16 +122,17 @@ function renderTodayHabitGroups(
 ): string {
   return (["build", "avoid"] as const)
     .map((direction) => {
-      const directionItems = items.filter((item) => item.habit.direction === direction);
+      const directionItems = items.filter((item) => (ruleForDate(state.rules, item.habit.id, state.selectedDate)?.direction ?? item.habit.direction) === direction);
       if (!directionItems.length) return "";
       const required = directionItems.filter((item) => !item.habit.optional);
       const optional = directionItems.filter((item) => item.habit.optional);
       return `
         <div class="habit-group" data-habit-group="${direction}">
-          <div class="habit-group-heading">
+          <div class="habit-group-heading" ${direction === "avoid" ? 'id="avoidCheckinHeading" tabindex="-1"' : ""}>
             <span>${icon(direction === "build" ? "plus" : "shield", 16)} ${direction === "build" ? "Build" : "Avoid"}</span>
             <small>${directionItems.length}</small>
           </div>
+          ${direction === "avoid" ? '<p class="avoid-checkin-note">Confirm at day’s end. These protect the day, but do not add to your action badge.</p>' : ""}
           ${required.map(({ habit, evaluation }) => renderHabitCheck(state, habit, evaluation.status)).join("")}
           ${
             optional.length

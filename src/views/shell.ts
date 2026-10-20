@@ -52,12 +52,12 @@ export function renderShell(state: AppState, sync: CloudSyncSnapshot): string {
       </nav>
       <div id="modalRoot"></div>
       <div id="toastRoot" aria-live="polite"></div>
-      <div id="celebrationRoot" aria-live="polite"></div>
       <div id="pullRefresh" class="pull-refresh" aria-live="polite" aria-hidden="true">
         <span>${icon("refreshCw", 18)}</span><strong>Pull to refresh</strong>
       </div>
       <div class="offline-banner" hidden>${icon("wifiOff", 16)} Offline — changes stay on this device</div>
     </div>
+    <div id="celebrationRoot" aria-live="polite"></div>
   `;
 }
 

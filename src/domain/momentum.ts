@@ -1,6 +1,7 @@
 import type { AppState, Habit } from "../types";
 import { evaluateHabitDay } from "./compliance";
 import { addDays, dateRange, todayKey } from "./dates";
+import { dayProgress } from "./day-progress";
 
 export type MomentumDayTone = "secured" | "partial" | "open" | "rest";
 
@@ -85,18 +86,7 @@ export function momentumSummary(state: AppState, end = todayKey()): MomentumSumm
 }
 
 export function isDaySecured(state: AppState, localDate: string): boolean {
-  const evaluations = activeRequiredHabits(state)
-    .map((habit) =>
-      evaluateHabitDay({
-        habit,
-        rules: state.rules,
-        logs: state.logs,
-        exceptions: state.exceptions,
-        localDate,
-      }),
-    )
-    .filter((evaluation) => evaluation.applicable);
-  return evaluations.length > 0 && evaluations.every((evaluation) => evaluation.successful);
+  return dayProgress(state, localDate).secured;
 }
 
 export function isRecoveryCompletion(state: AppState, habitId: string, localDate: string): boolean {
@@ -118,17 +108,8 @@ export function isRecoveryCompletion(state: AppState, habitId: string, localDate
 }
 
 export function remainingRequiredToday(state: AppState): number {
-  return activeRequiredHabits(state)
-    .map((habit) =>
-      evaluateHabitDay({
-        habit,
-        rules: state.rules,
-        logs: state.logs,
-        exceptions: state.exceptions,
-        localDate: todayKey(),
-      }),
-    )
-    .filter((evaluation) => evaluation.applicable && !evaluation.successful).length;
+  // The app badge is an action list, not a count of unconfirmed Avoid habits.
+  return dayProgress(state, todayKey()).buildRemaining;
 }
 
 function activeRequiredHabits(state: AppState): Habit[] {

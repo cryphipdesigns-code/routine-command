@@ -45,7 +45,7 @@ export function renderSettings(state: AppState, sync: CloudSyncSnapshot): string
             ${[0.7, 0.8, 0.9, 1].map((target) => `<option value="${target}" ${state.settings.rewardTarget === target ? "selected" : ""}>${Math.round(target * 100)}% adherence</option>`).join("")}
           </select></label>
           <p class="settings-note">Unlocks after at least five eligible days in the last seven. Recovery counts; perfection is not required.</p>
-          <div class="setting-row home-cue-row"><div><strong>Home Screen count</strong><span>Badge the app icon with required habits remaining</span></div>${state.settings.appBadgeEnabled ? '<button class="secondary-button small" data-action="disable-app-badge">Disable</button>' : '<button class="secondary-button small" data-action="enable-app-badge">Enable</button>'}</div>
+          <div class="setting-row home-cue-row"><div><strong>Home Screen count</strong><span>Required Build actions left. Avoid check-ins are separate.</span></div>${state.settings.appBadgeEnabled ? '<button class="secondary-button small" data-action="disable-app-badge">Disable</button>' : '<button class="secondary-button small" data-action="enable-app-badge">Enable</button>'}</div>
           <p class="settings-note">Free widget alternative. On iPhone, enable this from the installed Home Screen app; Apple requires notification permission for icon badges.</p>
         </div>
 

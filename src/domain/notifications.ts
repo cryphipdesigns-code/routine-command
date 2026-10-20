@@ -1,6 +1,7 @@
 import type { AppState, Habit, NotificationSettings } from "../types.ts";
 import { evaluateHabitDay } from "./compliance.ts";
 import { addDays } from "./dates.ts";
+import { dayProgress } from "./day-progress.ts";
 
 export type NoticeKind = "evening" | "slip" | "skip" | "trend";
 export interface CoachQuote { id: string; text: string; author: string; source: string; weight: number }
@@ -91,10 +92,7 @@ export function buildAccountabilityNotice(
   const quote = settings.quotes ? pickCoachQuote(key) : null;
   const titles: Record<NoticeKind, string> = { evening: "Your day is still open", slip: "Own the slip. Reset the next choice.", skip: "Skip recorded. Own the decision.", trend: "The pattern has receipts" };
   const context = details || `${name}: ${kind === "slip" ? "slip logged" : kind === "skip" ? "skipped" : "needs a check-in"}.`;
-  const remaining = state.habits.filter((item) => !item.archivedAt && !item.optional).filter((item) => {
-    const day = evaluateHabitDay({ habit: item, rules: state.rules, logs: state.logs, exceptions: state.exceptions, localDate, today: localDate });
-    return day.applicable && !day.successful;
-  }).length;
+  const remaining = dayProgress(state, localDate).buildRemaining;
   return { key, kind, localDate, habitId: habit?.id, eventAt, title: titles[kind], body: `${context}\n${challenge}${quote ? `\n“${quote.text}” — ${quote.author}` : ""}`, challenge, quote, remaining, badgeEnabled: state.settings.appBadgeEnabled };
 }
 
@@ -148,7 +146,10 @@ export function notificationCandidates(state: AppState, now = new Date()): Accou
       notices.push(buildAccountabilityNotice(state, "evening", localDate, undefined, `${open.length} Build ${open.length === 1 ? "habit still unconfirmed" : "habits still unconfirmed"}.${names}`));
     }
   }
-  return notices;
+  // A delayed notification can describe yesterday's slip, but the icon must
+  // always show today's actions in the user's timezone, never yesterday's list.
+  const remaining = dayProgress(state, localDate).buildRemaining;
+  return notices.map(notice => ({ ...notice, remaining }));
 }
 
 function dueSoonAfter(minutes: number, time: string): boolean { const since = minutes - timeMinutes(time); return since >= 0 && since < 60; }
